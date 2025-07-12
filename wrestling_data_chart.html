@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>女子プロレス選手一覧表</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .debug-controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .debug-toggle {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .debug-toggle:hover {
+            background: linear-gradient(135deg, #495057, #343a40);
+            transform: translateY(-1px);
+        }
+        
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .stats-summary {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin: 30px 0;
+            max-width: 300px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            display: none;
+            gap: 15px;
+            margin: 20px 0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .back-btn {
+            background: linear-gradient(135deg, #e17055, #d63031);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        
+        .filter-info {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .table-container {
+            margin: 30px 0;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: 2px solid #e0e0e0;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 1400px;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 8px;
+            text-align: center;
+            font-weight: bold;
+            border: 1px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        th:hover {
+            background: linear-gradient(135deg, #5a67d8, #667eea);
+        }
+        
+        th:first-child {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            position: sticky;
+            left: 0;
+            z-index: 11;
+            min-width: 80px;
+        }
+        
+        th:first-child:hover {
+            background: linear-gradient(135deg, #e55656, #d63031);
+        }
+        
+        .sortable::after {
+            content: ' ↕';
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .sortable.asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        
+        .sortable.desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        
+        td {
+            padding: 10px 8px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+            line-height: 1.4;
+            max-width: 150px;
+            word-wrap: break-word;
+        }
+        
+        td:first-child {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            position: sticky;
+            left: 0;
+            z-index: 9;
+            min-width: 80px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        td:first-child:hover {
+            background: linear-gradient(135deg, #e55656, #d63031);
+        }
+        
+        tr:nth-child(even) td:not(:first-child) {
+            background: #f8f9fa;
+        }
+        
+        tr:hover td:not(:first-child) {
+            background: #e3f2fd;
+        }
+        
+        .wrestler-name {
+            display: block;
+            margin: 2px 0;
+            padding: 2px 4px;
+            background: rgba(116, 185, 255, 0.1);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .empty-cell {
+            background: #f0f0f0;
+            opacity: 0.5;
+        }
+        
+        .download-btn {
+            display: none;
+        }
+        
+        .promotion-header {
+            font-size: 11px;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            min-width: 120px;
+            max-width: 120px;
+        }
+        
+        .year-detail-view {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .year-title {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .promotion-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .promotion-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border-top: 3px solid #667eea;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .promotion-name-card {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .wrestler-names-card {
+            color: #2d3436;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="content">
+        <div class="header">
+            <h1>🤼‍♀️ 女子プロレス選手一覧表 🤼‍♀️</h1>
+            <p>現役選手のデビュー年・団体別完全データ</p>
+        </div>
+        
+        <div class="content">
+            <!-- デバッグコントロール -->
+            <div class="debug-controls">
+                <button class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
+            </div>
+            
+            <!-- デバッグ情報表示エリア -->
+            <div class="debug-info" id="debugInfo">
+                <strong>デバッグログ:</strong><br>
+                読み込み開始...<br>
+            </div>
+            
+            <div class="stats-summary">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalWrestlers">計算中...</div>
+                    <div class="stat-label">総現役選手数</div>
+                </div>
+            </div>
+            
+            <div class="controls" id="controls">
+                <!-- コントロールボタンがここに動的に追加されます -->
+            </div>
+            
+            <div class="year-detail-view" id="yearDetailView">
+                <!-- 年別詳細ビューがここに表示されます -->
+            </div>
+            
+            <div class="table-container" id="tableContainer">
+                <div class="table-wrapper">
+                    <table id="wrestlersTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable desc" onclick="toggleSort()">デビュー年</th>
+                                <th class="promotion-header" onclick="filterByPromotion('Stardom', 1)">Stardom</th>
+                                <th class="promotion-header" onclick="filterByPromotion('AWG', 2)">AWG</th>
+                                <th class="promotion-header" onclick="filterByPromotion('TJPW', 3)">TJPW</th>
+                                <th class="promotion-header" onclick="filterByPromotion('マリゴ', 4)">マリゴ</th>
+                                <th class="promotion-header" onclick="filterByPromotion('IR/ホットシュシュ', 5)">IR/ホットシュシュ</th>
+                                <th class="promotion-header" onclick="filterByPromotion('チョコプロ', 6)">チョコプロ</th>
+                                <th class="promotion-header" onclick="filterByPromotion('JTO', 7)">JTO</th>
+                                <th class="promotion-header" onclick="filterByPromotion('Diana', 8)">Diana</th>
+                                <th class="promotion-header" onclick="filterByPromotion('Pure-J', 9)">Pure-J</th>
+                                <th class="promotion-header" onclick="filterByPromotion('マーベラス', 10)">マーベラス</th>
+                                <th class="promotion-header" onclick="filterByPromotion('SENDAI', 11)">SENDAI</th>
+                                <th class="promotion-header" onclick="filterByPromotion('Wave', 12)">Wave</th>
+                                <th class="promotion-header" onclick="filterByPromotion('LLPW-X', 13)">LLPW-X</th>
+                                <th class="promotion-header" onclick="filterByPromotion('2.5', 14)">2.5</th>
+                                <th class="promotion-header" onclick="filterByPromotion('シード', 15)">シード</th>
+                                <th class="promotion-header" onclick="filterByPromotion('ガンプロ', 16)">ガンプロ</th>
+                                <th class="promotion-header" onclick="filterByPromotion('海外', 17)">海外</th>
+                                <th class="promotion-header" onclick="filterByPromotion('その他', 18)">その他</th>
+                                <th class="promotion-header" onclick="filterByPromotion('フリー', 19)">フリー</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- データがJavaScriptで追加されます -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // デバッグ用ログ関数
+        function debugLog(message) {
+            const debugInfo = document.getElementById('debugInfo');
+            const currentTime = new Date().toLocaleTimeString();
+            debugInfo.innerHTML += `${currentTime}: ${message}<br>`;
+            debugInfo.scrollTop = debugInfo.scrollHeight;
+            console.log(message);
+        }
+
+        // グローバル変数
+        let sortOrder = 'desc';
+        let currentFilter = null;
+        let isFiltered = false;
+        let debugVisible = false;
+
+        debugLog('スクリプト開始 - グローバル変数初期化完了');
+
+        // デバッグ表示切り替え関数
+        function toggleDebug() {
+            debugVisible = !debugVisible;
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.style.display = debugVisible ? 'block' : 'none';
+            debugLog(`デバッグ表示: ${debugVisible ? '表示' : '非表示'}`);
+        }
+
+        // データを直接定義（完全版）
+        const wrestlerData = [
+            [2025, "鉄アキラ\n姫ゆりあ\n金屋あんね\n儛島エマ\n古沢稀杏", "梨央\n(弥福かな)", "小夏れん", "山岡聖怜\n心希\n山﨑裕花", "りこ(IR)\n緋彩もえ(HCC)", "", "ホルスタイン・エンジュ", "", "", "根本楓花（プロテスト合格）", "", "", "", "", "風南ユキ\n望天セレネ", "", "", "", "苺畑ひより(666)"],
+            [2024, "梨杏\n浜辺纏", "アンリ\n永井絵梨沙\n千夜ヒナタ\n石塚美帆\n日菜といろ\n植原ゆきな", "七瀬千花\nキラサマー\n高見汐珠", "南小桃\n橘渚\n咲村良子", "若菜きらり(IR)\n緋彩ませ(HCC)", "奏衣エリー\n谷綿ヒヨリ\n広海カホ", "みず葉\nジャンボ井上\nビッグ春華", "NENE", "JENNE", "彩芽蒼空\n暁千華", "", "", "ひなた乃彩", "レディくらら(2.5)\nレディせりな(2.5)", "光芽ミリア", "", "", "", ""],
+            [2023, "さくらあや\nHANAKO\n玖麗さやか\n八神蘭奈", "青葉ちい\n山下真菜\n研菜々美\n天翔ゆい", "風城ハル\n芦田美歩\n大久保琉那(休)\n鈴木志乃\n凍雅\n上原わかな", "ビクトリア弓月\n田中きずな\n勇気みなみ\n瀬戸レア", "ゆづき(HCC)\nchou・chou(HCC)", "瀬戸ノノカ", "稲葉あずさ", "香藤満月", "", "", "YUNA", "炎華\n郷田明日香", "キャサリン", "noa(2.5)", "", "", "", "", "リアラ\nマコトユマ(D引退中)"],
+            [2022, "天咲光由", "荒幡寧々\n福永莉子\n水嶋さくら\nみあ朝子\n石川はるか\nKYANREN\n岩井杏加\n才原茉莉乃\n汐月なぎさ", "HIMAWARI", "ハミングバード\nメガトン\n後藤智香\n天麗皇希\n山田奈保", "海乃月雫(IR)\nしのせ愛梨紗(飛鳥)", "四ツ葉ミヤ", "HisokA", "Himiko\n美蘭", "", "", "", "", "", "フライング・ペンギン(2.5)\nぽっぽちゃん(2.5)", "", "", "", "叶みく(T-HAWK)", "七星"],
+            [2021, "虎龍清花", "なる\n夏葵", "遠藤有栖\n鳥喰かや\n荒井優希", "CHIAKI", "松下楓歩(IR)\nキク(HCC)", "", "Aoi", "", "", "宝山愛", "", "咲蘭", "", "", "花穂ノ利", "", "", "", "鶴姫花（愛媛）"],
+            [2020, "レディ・Ｃ\n壮麗亜美\n月山和香", "", "宮本もか", "石川奈青\n桜井麻衣", "", "", "柳川澄樺(7/31フリー)\n神姫楽ミサ(7/31フリー)", "", "大空ちえ", "", "", "", "", "", "", "YuuRI", "", "", "真白優希"],
+            [2019, "飯田沙耶\n上谷沙弥\n向後桃\n舞華(休)", "", "桐生真弥\n鈴芽", "MIRAI", "Yappy(IR)\nこゆき(HCC)", "桐原季子\n小石川チエ\n沙也加", "稲葉ともか\nrhythm", "梅咲遥\n羽多乃ナナミ", "AKARI\n久令愛", "", "岡優里佳", "", "", "", "", "", "", "山中絵里奈(BBJ)", "長谷川美子(7/8引退予定)\nバニー及川\nマドレーヌ\nウナギ・サヤカ"],
+            [2018, "吏南\n妃南\n鈴季すず\n水森由菜\n星来芽依", "入江彩乃\n未依(休)", "猫はるな(休)\n渡辺未詩\n原宿ぽむ\nらく\n愛野ユキ", "林下詩美\n松井珠紗", "", "駿河メイ", "", "", "谷もも", "Maria\n川畑梨瑚", "", "狐伯", "", "", "", "", "白川未奈(AEW)", "竹林早苗(BBJ)\n櫻井裕子(COLORS)\n網倉理奈(COLORS)\nKONOHA(銀河)\n花園桃花(アップタウン)\n杏ちゃむ(信州)", "マリ卍"],
+            [2017, "羽南", "", "", "青野未来", "トトロさつき(IR)\n星いぶき(IR)", "", "", "", "", "", "愛海", "", "NORI", "", "", "", "ジュリア(WWE)", "青木いつ希(SC)", "関口翔\n高瀬みゆき"],
+            [2016, "刀羅ナツコ\n琉悪夏", "茉莉", "", "", "", "", "", "", "", "桃野美桜", "", "", "", "", "", "", "", "優宇(EVE)", "伊藤麻希\n小橋マリカ"],
+            [2015, "スターライト・キッド\nなつぽい\n安納サオリ\n小波", "", "ハイパーミサヲ", "", "", "", "", "", "", "", "岩田美香\n橋本千紘", "", "", "", "", "", "ASUKA(WWE)", "", "VENY\n尾崎妹加\n本間多恵(引退発表)\nジャングル叫女"],
+            [2014, "渡辺桃", "", "辰巳リカ", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "雪妃真矢"],
+            [2013, "コグマ\n葉月\nAZM", "", "山下実優\n中島翔子", "", "", "", "", "", "", "", "", "", "", "", "", "まなせゆうな", "坂崎ユカ(AEW)", "", "山下りな\n日向小陽(休)\n夏 すみれ\n藤田あかね\n小林香萌\nYAKO\n上福ゆき"],
+            [2012, "", "", "瑞希", "", "", "", "", "", "ライディーン鋼", "彩羽匠", "", "", "", "", "", "", "", "SAKI(COLORS)\n世羅りさ(PR)(引退発表済)"],
+            [2011, "鹿島沙希", "惡斗", "", "翔月なつみ", "勝愛実(IR)", "", "", "", "", "", "ハイジ・カトリーナ", "", "", "", "", "HARUKAZE", "KAIRI(WWE)", "", "Sareee"],
+            [2010, "", "", "", "岩谷麻優", "", "帯広さやか", "", "", "", "", "", "", "", "", "世志琥(休)", "", "", "柊くるみ(PR)\n夏実もち(PR)\nLINDA(信州)"],
+            [2009, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "石橋葵(世界)"],
+            [2008, "朱里", "", "", "", "藤本つかさ(休)\n星ハム子(IR)", "", "", "", "", "", "", "", "", "", "", "", "志田光(AEW)", "", "松本都"],
+            [2007, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "紫雷イオ(WWE)", "", "紫雷美央\nキラアン"],
+            [2006, "", "", "", "", "みなみ飛香(IR)(休)", "", "", "", "中森華子", "", "DASHチサコ", "", "", "", "", "", "里歩(AEW)", "", "野崎渚\n真琴\n松本浩代\n雫有希"],
+            [2005, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "春日萌花", "", "ラム会長(666)", "群馬"],
+            [2004, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "バンビ(世界)", "チェリー\n水波綾"],
+            [2003, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [2002, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "ハイビスカスみぃ(琉球)", ""],
+            [2001, "", "", "", "", "", "", "", "佐藤綾子", "", "", "", "桜花由美", "", "", "", "", "", "", ""],
+            [2000, "", "MARU", "", "", "", "", "", "", "Leon", "", "", "", "", "", "", "", "", "", "山縣優\n唯我"],
+            [1999, "フキゲンです", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "米山香織(ゴキゲン)", ""],
+            [1998, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "AKINO(OZ)", "救世忍者乱丸"],
+            [1997, "", "", "", "", "", "", "", "", "KAZUKI", "", "", "", "", "", "", "", "", "", "藪下めぐみ"],
+            [1996, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "シン・広田さくら"],
+            [1995, "", "", "", "", "", "さくらえみ", "", "", "", "", "", "宮崎有妃", "", "", "", "", "", "加藤園子(OZ)\nミス・モンゴル(世界)", "永島千佳世\n倉垣翼"],
+            [1994, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1993, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1992, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1991, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1990, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1989, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "渡辺智子\n伊藤薫"],
+            [1988, "", "", "", "", "", "", "", "井上京子", "", "", "", "", "井上貴子", "", "", "", "", "", ""],
+            [1987, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "下田美馬"],
+            [1986, "", "", "", "", "", "", "", "", "", "", "", "", "神取忍", "", "", "", "", "尾崎魔弓(OZ)", "アジャコング"],
+            [1985, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "堀田祐美子(T-HAWK)", ""],
+            [1984, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1983, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1982, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1981, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1980, "", "", "", "", "", "", "", "", "", "長与千種", "", "", "", "", "", "", "", "", "ダンプ松本"],
+            [1979, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1978, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [1977, "", "", "", "", "", "", "", "ジャガー横田", "", "", "", "", "", "", "", "", "", "", ""]
+        ];
+
+        debugLog(`データ読み込み完了: ${wrestlerData.length}行のデータ`);
+
+        const promotionNames = ['Stardom', 'AWG', 'TJPW', 'マリゴ', 'IR/ホットシュシュ', 'チョコプロ', 'JTO', 'Diana', 'Pure-J', 'マーベラス', 'SENDAI', 'Wave', 'LLPW-X', '2.5', 'シード', 'ガンプロ', '海外', 'その他', 'フリー'];
+
+        debugLog(`団体名定義完了: ${promotionNames.length}団体`);
+
+        // 全ての関数を定義
+        function calculateTotalWrestlers() {
+            debugLog('選手数計算開始');
+            let total = 0;
+            try {
+                wrestlerData.forEach((row, index) => {
+                    for (let i = 1; i < row.length; i++) {
+                        const wrestlers = row[i];
+                        if (wrestlers && wrestlers.trim()) {
+                            const wrestlerList = wrestlers.split('\n').filter(name => name.trim());
+                            total += wrestlerList.length;
+                        }
+                    }
+                });
+                document.getElementById('totalWrestlers').textContent = total;
+                debugLog(`総選手数: ${total}人`);
+            } catch (error) {
+                debugLog(`選手数計算エラー: ${error.message}`);
+            }
+        }
+
+        function renderTable(data) {
+            debugLog('テーブル描画開始');
+            try {
+                const tableBody = document.getElementById('tableBody');
+                if (!tableBody) {
+                    debugLog('エラー: tableBodyが見つかりません');
+                    return;
+                }
+                
+                tableBody.innerHTML = '';
+                debugLog('テーブルボディクリア完了');
+
+                // ソート
+                const sortedData = [...data].sort((a, b) => {
+                    return sortOrder === 'desc' ? b[0] - a[0] : a[0] - b[0];
+                });
+                debugLog(`データソート完了: ${sortedData.length}行`);
+
+                sortedData.forEach((row, rowIndex) => {
+                    const tr = document.createElement('tr');
+                    
+                    // 年度セル
+                    const yearTd = document.createElement('td');
+                    yearTd.textContent = row[0];
+                    yearTd.onclick = () => {
+                        debugLog(`年度クリック: ${row[0]}`);
+                        showYearDetail(row[0], row);
+                    };
+                    tr.appendChild(yearTd);
+
+                    // 団体セル
+                    for (let i = 1; i < row.length; i++) {
+                        const td = document.createElement('td');
+                        const wrestlers = row[i];
+                        
+                        if (wrestlers && wrestlers.trim()) {
+                            const wrestlerList = wrestlers.split('\n').filter(name => name.trim());
+                            wrestlerList.forEach(wrestler => {
+                                if (wrestler.trim()) {
+                                    const span = document.createElement('span');
+                                    span.className = 'wrestler-name';
+                                    span.textContent = wrestler.trim();
+                                    td.appendChild(span);
+                                }
+                            });
+                        } else {
+                            td.className = 'empty-cell';
+                        }
+                        tr.appendChild(td);
+                    }
+                    
+                    tableBody.appendChild(tr);
+                });
+                
+                debugLog(`テーブル描画完了: ${sortedData.length}行追加`);
+            } catch (error) {
+                debugLog(`テーブル描画エラー: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function toggleSort() {
+            debugLog('ソート切り替え開始');
+            try {
+                sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+                const sortTh = document.querySelector('.sortable');
+                if (sortTh) {
+                    sortTh.className = 'sortable ' + sortOrder;
+                }
+                debugLog(`ソート順変更: ${sortOrder}`);
+                
+                renderTable(wrestlerData);
+            } catch (error) {
+                debugLog(`ソート切り替えエラー: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function filterByPromotion(promotionName, promotionIndex) {
+            debugLog(`団体フィルター開始: ${promotionName} (インデックス: ${promotionIndex})`);
+            try {
+                const filteredData = wrestlerData.filter(row => {
+                    const wrestlers = row[promotionIndex];
+                    return wrestlers && wrestlers.trim();
+                });
+                
+                debugLog(`フィルター結果: ${filteredData.length}行`);
+                
+                currentFilter = {
+                    type: 'promotion',
+                    value: promotionName,
+                    data: filteredData,
+                    index: promotionIndex
+                };
+                isFiltered = true;
+                
+                showControls();
+                showPromotionDetail(promotionName, filteredData, promotionIndex);
+            } catch (error) {
+                debugLog(`団体フィルターエラー: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function showYearDetail(year, yearRow) {
+            debugLog(`年詳細表示開始: ${year}`);
+            try {
+                const promotions = [];
+                
+                for (let i = 1; i < yearRow.length && i - 1 < promotionNames.length; i++) {
+                    const wrestlers = yearRow[i];
+                    if (wrestlers && wrestlers.trim()) {
+                        promotions.push({
+                            name: promotionNames[i - 1],
+                            wrestlers: wrestlers.split('\n').filter(name => name.trim())
+                        });
+                    }
+                }
+                
+                debugLog(`年詳細: ${promotions.length}団体に選手在籍`);
+                
+                currentFilter = {type: 'year', value: year, data: promotions};
+                isFiltered = true;
+                
+                showControls();
+                showYearDetailView(year, promotions);
+            } catch (error) {
+                debugLog(`年詳細表示エラー: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function showControls() {
+            debugLog('コントロール表示');
+            try {
+                const controls = document.getElementById('controls');
+                controls.style.display = 'flex';
+                
+                let html = '<button class="back-btn" onclick="resetFilter()">← 全体表示に戻る</button>';
+                
+                if (currentFilter) {
+                    if (currentFilter.type === 'promotion') {
+                        html += `<div class="filter-info">フィルター: ${currentFilter.value}</div>`;
+                    } else if (currentFilter.type === 'year') {
+                        html += `<div class="filter-info">フィルター: ${currentFilter.value}年</div>`;
+                    }
+                }
+                
+                controls.innerHTML = html;
+                debugLog('コントロール表示完了');
+            } catch (error) {
+                debugLog(`コントロール表示エラー: ${error.message}`);
+            }
+        }
+
+        function showPromotionDetail(promotionName, data, promotionIndex) {
+            debugLog(`団体詳細表示: ${promotionName}`);
+            try {
+                document.getElementById('tableContainer').style.display = 'none';
+                const yearDetailView = document.getElementById('yearDetailView');
+                yearDetailView.style.display = 'block';
+                
+                let html = `
+                    <div class="year-title">${promotionName} 所属選手一覧</div>
+                    <div class="promotion-grid">
+                `;
+                
+                data.forEach(row => {
+                    const year = row[0];
+                    const wrestlers = row[promotionIndex];
+                    if (wrestlers && typeof wrestlers === 'string') {
+                        const wrestlerList = wrestlers.split('\n')
+                            .filter(name => name.trim())
+                            .map(name => name.trim());
+                        
+                        html += `
+                            <div class="promotion-card">
+                                <div class="promotion-name-card">${year}年デビュー</div>
+                                <div class="wrestler-names-card">${wrestlerList.join('<br>')}</div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                html += '</div>';
+                yearDetailView.innerHTML = html;
+                debugLog('団体詳細表示完了');
+            } catch (error) {
+                debugLog(`団体詳細表示エラー: ${error.message}`);
+            }
+        }
+
+        function showYearDetailView(year, promotions) {
+            debugLog(`年別詳細表示: ${year}`);
+            try {
+                document.getElementById('tableContainer').style.display = 'none';
+                const yearDetailView = document.getElementById('yearDetailView');
+                yearDetailView.style.display = 'block';
+                
+                let html = `
+                    <div class="year-title">${year}年デビュー選手一覧</div>
+                    <div class="promotion-grid">
+                `;
+                
+                promotions.forEach(promotion => {
+                    html += `
+                        <div class="promotion-card">
+                            <div class="promotion-name-card">${promotion.name}</div>
+                            <div class="wrestler-names-card">${promotion.wrestlers.join('<br>')}</div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                yearDetailView.innerHTML = html;
+                debugLog('年別詳細表示完了');
+            } catch (error) {
+                debugLog(`年別詳細表示エラー: ${error.message}`);
+            }
+        }
+
+        function resetFilter() {
+            debugLog('フィルターリセット');
+            try {
+                currentFilter = null;
+                isFiltered = false;
+                
+                document.getElementById('controls').style.display = 'none';
+                document.getElementById('yearDetailView').style.display = 'none';
+                document.getElementById('tableContainer').style.display = 'block';
+                
+                renderTable(wrestlerData);
+                debugLog('フィルターリセット完了');
+            } catch (error) {
+                debugLog(`フィルターリセットエラー: ${error.message}`);
+            }
+        }
+
+        // 初期表示
+        window.onload = function() {
+            debugLog('window.onload開始');
+            try {
+                renderTable(wrestlerData);
+                debugLog('テーブル描画完了');
+                calculateTotalWrestlers();
+                debugLog('選手数計算完了');
+                debugLog('初期化完了 - 全ての機能が利用可能です');
+            } catch (error) {
+                debugLog(`初期化エラー: ${error.message}`);
+                console.error(error);
+            }
+        };
+
+        debugLog('全ての関数定義完了');
+    </script>
+</body>
+</html>
