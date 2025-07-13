@@ -23,25 +23,35 @@ class XlsxToHtmlConverter:
         self.config = self.load_config(config_file)
     
     def load_config(self, config_file):
-        """設定ファイルを読み込み"""
-        default_config = {
-            "xlsx_file": "woman-excel.xlsx",
-            "html_file": "wrestling_data_chart.html",
-            "sheet_name": 0,
-            "js_variable_name": "wrestlerData",
-            "encoding": "utf-8"
-        }
+        """設定ファイルを読み込み - デフォルトはconverter_config.json"""
+        # 設定ファイルが指定されていない場合はデフォルトを使用
+        if not config_file:
+            config_file = "converter_config.json"
         
-        if config_file and os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    user_config = json.load(f)
-                default_config.update(user_config)
-            except Exception as e:
-                print(f"設定ファイル読み込みエラー: {e}")
-                print("デフォルト設定を使用します")
+        # 設定ファイルが存在しない場合は処理を中止
+        if not os.path.exists(config_file):
+            raise Exception(f"設定ファイルが見つかりません: {config_file}")
         
-        return default_config
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # 必須項目をチェック
+            required_fields = ["xlsx_file", "html_file", "js_variable_name"]
+            for field in required_fields:
+                if field not in config:
+                    raise Exception(f"設定ファイルに必須項目 '{field}' がありません")
+            
+            # デフォルト値を設定
+            config.setdefault("sheet_name", 0)
+            config.setdefault("encoding", "utf-8")
+            
+            return config
+            
+        except json.JSONDecodeError as e:
+            raise Exception(f"設定ファイルのJSON形式が正しくありません: {e}")
+        except Exception as e:
+            raise Exception(f"設定ファイル読み込みエラー: {e}")
     
     def read_xlsx_data(self, xlsx_file=None):
         """XLSXファイルからデータを読み込み"""
@@ -367,7 +377,7 @@ def create_sample_config():
     """設定ファイルのサンプルを作成"""
     sample_config = {
         "xlsx_file": "woman-excel.xlsx",
-        "html_file": "wrestling_data_chart.html",
+        "html_file": "index.html",
         "sheet_name": 0,
         "js_variable_name": "wrestlerData",
         "encoding": "utf-8"
