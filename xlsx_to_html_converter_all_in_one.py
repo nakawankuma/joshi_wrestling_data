@@ -55,6 +55,33 @@ class XlsxToHtmlConverter:
         except Exception as e:
             raise Exception(f"XLSXファイル読み込みエラー: {e}")
     
+    def extract_promotion_headers(self, df):
+        """Excelファイルから団体名のヘッダーを抽出"""
+        header_row = None
+        for index, row in df.iterrows():
+            if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() == "デビュー年":
+                header_row = index
+                break
+        
+        if header_row is None:
+            print("ヘッダー行が見つかりません")
+            return []
+        
+        # ヘッダー行から団体名を抽出（2列目以降）
+        promotion_names = []
+        header_data = df.iloc[header_row]
+        
+        for col_idx in range(2, len(header_data)):
+            cell_value = header_data.iloc[col_idx]
+            if pd.notna(cell_value):
+                promotion_name = str(cell_value).strip()
+                promotion_names.append(promotion_name)
+            else:
+                promotion_names.append("")
+        
+        print(f"抽出された団体名: {promotion_names}")
+        return promotion_names
+
     def convert_to_js_array(self, df):
         """DataFrameをJavaScript配列形式に変換（完全なJSON処理）"""
         js_array = []
@@ -107,6 +134,50 @@ class XlsxToHtmlConverter:
         
         return js_string
     
+    def update_html_headers(self, promotion_names, html_file=None):
+        """HTMLファイルのヘッダー部分を更新"""
+        file_path = html_file or self.config["html_file"]
+        
+        try:
+            # HTMLファイルを読み込み
+            with open(file_path, 'r', encoding=self.config["encoding"]) as f:
+                html_content = f.read()
+            
+            # ヘッダー行のパターンを検索
+            header_pattern = r'(<tr>\s*<th class="sortable desc"[^>]*>デビュー年</th>\s*)(.*?)(\s*</tr>)'
+            
+            match = re.search(header_pattern, html_content, re.DOTALL)
+            if not match:
+                print("警告: ヘッダー行が見つかりませんでした")
+                return html_content
+            
+            # 新しいヘッダーを生成
+            new_headers = []
+            for i, promotion_name in enumerate(promotion_names):
+                if promotion_name.strip():
+                    header_html = f'<th class="promotion-header" onclick="filterByPromotion(\'{promotion_name}\', {i+1})">{promotion_name}</th>'
+                    new_headers.append(header_html)
+            
+            # ヘッダー行を置換
+            new_header_content = match.group(1) + '\n                                '.join(new_headers) + match.group(3)
+            html_content = re.sub(header_pattern, new_header_content, html_content, flags=re.DOTALL)
+            
+            # JavaScript配列の団体名も更新
+            promotion_names_js = json.dumps(promotion_names, ensure_ascii=False)
+            promotion_pattern = r'const promotionNames = \[.*?\];'
+            new_promotion_js = f'const promotionNames = {promotion_names_js};'
+            html_content = re.sub(promotion_pattern, new_promotion_js, html_content, flags=re.DOTALL)
+            
+            # HTMLファイルに書き戻し
+            with open(file_path, 'w', encoding=self.config["encoding"]) as f:
+                f.write(html_content)
+            
+            print(f"HTMLヘッダー更新完了: {len(promotion_names)}個の団体")
+            return html_content
+            
+        except Exception as e:
+            raise Exception(f"HTMLヘッダー更新エラー: {e}")
+
     def update_html_file(self, js_array_string, html_file=None):
         """HTMLファイルのJavaScript配列を更新"""
         file_path = html_file or self.config["html_file"]
@@ -245,12 +316,21 @@ class XlsxToHtmlConverter:
             print("📋 ステップ1: XLSXデータをHTMLに変換")
             df = self.read_xlsx_data(xlsx_file)
             
+            # 団体名ヘッダーを抽出
+            promotion_names = self.extract_promotion_headers(df)
+            
             # JavaScript配列に変換
             js_array = self.convert_to_js_array(df)
             
             # HTMLファイルを更新
             self.update_html_file(js_array, html_file)
             print("✅ データ変換完了")
+            print()
+            
+            # ステップ1.5: HTMLヘッダーを更新
+            print("🏷️ ステップ1.5: HTMLヘッダーをExcelに合わせて更新")
+            self.update_html_headers(promotion_names, html_file)
+            print("✅ ヘッダー更新完了")
             print()
             
             # ステップ2: 改行文字を修正
