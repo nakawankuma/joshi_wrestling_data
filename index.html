@@ -205,10 +205,6 @@
             opacity: 0.7;
         }
         
-        .sortable.asc::after {
-            content: ' ↑';
-            opacity: 1;
-        }
         
         .sortable.desc::after {
             content: ' ↓';
@@ -249,23 +245,8 @@
             background: #e3f2fd;
         }
         
-        .wrestler-name {
-            display: block;
-            margin: 2px 0;
-            padding: 2px 4px;
-            background: rgba(116, 185, 255, 0.1);
-            border-radius: 4px;
-            font-size: 12px;
-        }
         
-        .empty-cell {
-            background: #f0f0f0;
-            opacity: 0.5;
-        }
         
-        .download-btn {
-            display: none;
-        }
         
         .promotion-header {
             font-size: 11px;
@@ -1514,7 +1495,7 @@
             debugLog('選手数計算開始');
             let total = 0;
             try {
-                wrestlerData.forEach((row, index) => {
+                wrestlerData.forEach((row) => {
                     for (let i = 1; i < row.length; i++) {
                         const wrestlers = row[i];
                         if (wrestlers && wrestlers.trim()) {
@@ -1591,7 +1572,7 @@
                 });
                 debugLog(`データソート完了: ${sortedData.length}行`);
 
-                sortedData.forEach((row, rowIndex) => {
+                sortedData.forEach((row) => {
                     const tr = document.createElement('tr');
                     
                     // 年度セル
@@ -1609,15 +1590,7 @@
                         const wrestlers = row[i];
                         
                         if (wrestlers && wrestlers.trim()) {
-                            const wrestlerList = wrestlers.split('\n').filter(name => name.trim());
-                            wrestlerList.forEach(wrestler => {
-                                if (wrestler.trim()) {
-                                    const span = document.createElement('span');
-                                    span.className = 'wrestler-name';
-                                    span.textContent = wrestler.trim();
-                                    td.appendChild(span);
-                                }
-                            });
+                            td.innerHTML = wrestlers.trim().replace(/\n/g, '<br>');
                         } else {
                             td.className = 'empty-cell';
                         }
