@@ -649,7 +649,7 @@
             
             <!-- 選手名検索機能 -->
             <div class="search-container">
-                <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" oninput="searchWrestlers()" onkeyup="searchWrestlers()">
+                <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" aria-label="選手名検索" oninput="searchWrestlers()" onkeyup="searchWrestlers()">
                 <button onclick="clearSearch()" class="clear-btn">クリア</button>
             </div>
             
@@ -2014,23 +2014,23 @@
                 // 検索中の場合は検索結果から、そうでなければ全データからフィルター
                 const sourceData = isSearching ? getCurrentFilteredData() : wrestlerData;
                 
-                const filteredData = sourceData.filter(row => {
+                const filteredResults = sourceData.filter(row => {
                     const wrestlers = row[promotionIndex];
                     return wrestlers && wrestlers.trim();
                 });
                 
-                debugLog(`フィルター結果: ${filteredData.length}行`);
+                debugLog(`フィルター結果: ${filteredResults.length}行`);
                 
                 currentFilter = {
                     type: 'promotion',
                     value: promotionName,
-                    data: filteredData,
+                    data: filteredResults,
                     index: promotionIndex
                 };
                 isFiltered = true;
                 
                 showControls();
-                showPromotionDetail(promotionName, filteredData, promotionIndex);
+                showPromotionDetail(promotionName, filteredResults, promotionIndex);
             } catch (error) {
                 debugLog(`団体フィルターエラー: ${error.message}`);
                 console.error(error);
@@ -2051,10 +2051,10 @@
             }
             
             // 検索結果を再計算
-            const filteredData = wrestlerData.map(row => {
+            return wrestlerData.map(row => {
                 const year = row[0];
                 const newRow = [year];
-                
+
                 // 各団体のセルをチェック
                 for (let i = 1; i < row.length; i++) {
                     const wrestlers = row[i];
@@ -2063,7 +2063,7 @@
                         const wrestlerList = wrestlers.split('\n')
                             .filter(name => name.trim())
                             .filter(name => name.toLowerCase().includes(searchTerm));
-                        
+
                         if (wrestlerList.length > 0) {
                             // マッチした選手名をハイライトなしで返す（団体フィルター用）
                             newRow.push(wrestlerList.join('\n'));
@@ -2074,13 +2074,11 @@
                         newRow.push('');
                     }
                 }
-                
+
                 // 何らかの結果がある行のみ返す
                 const hasResults = newRow.slice(1).some(cell => cell && cell.trim());
                 return hasResults ? newRow : null;
             }).filter(row => row !== null);
-            
-            return filteredData;
         }
 
         function showYearDetail(year, yearRow) {
@@ -2273,13 +2271,12 @@
                         
                         if (wrestlerList.length > 0) {
                             // マッチした選手名をハイライト
-                            const highlightedWrestlers = wrestlerList.map(name => {
-                                const highlightedName = name.replace(
+                            const highlightedWrestlers = wrestlerList.map(name => 
+                                name.replace(
                                     new RegExp(`(${searchTerm})`, 'gi'),
                                     '<span class="highlight">$1</span>'
-                                );
-                                return highlightedName;
-                            });
+                                )
+                            );
                             newRow.push(highlightedWrestlers.join('\n'));
                         } else {
                             newRow.push('');
