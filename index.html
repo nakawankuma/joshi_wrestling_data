@@ -168,6 +168,12 @@
             min-width: 1400px;
         }
         
+        /* 絞り込み時のテーブル幅調整 */
+        .table-container.filtered table {
+            min-width: auto;
+            width: auto;
+        }
+        
         th {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
@@ -193,6 +199,7 @@
             left: 0;
             z-index: 11;
             min-width: 80px;
+            width: auto;
         }
         
         th:first-child:hover {
@@ -229,6 +236,7 @@
             left: 0;
             z-index: 9;
             min-width: 80px;
+            width: auto;
             cursor: pointer;
             transition: background 0.3s ease;
         }
@@ -253,6 +261,28 @@
             writing-mode: horizontal-tb;
             min-width: 120px;
             max-width: 120px;
+            transition: min-width 0.3s ease, max-width 0.3s ease;
+        }
+        
+        /* 絞り込み時の動的列幅調整 */
+        .table-container.filtered .promotion-header:not(.hidden-column) {
+            min-width: 120px;
+            max-width: 250px;
+            width: auto;
+        }
+        
+        .table-container.filtered td:not(:first-child):not(.hidden-column) {
+            min-width: 120px;
+            max-width: 250px;
+            width: auto;
+        }
+        
+        /* 絞り込み時のデビュー年列の幅調整 */
+        .table-container.filtered th:first-child,
+        .table-container.filtered td:first-child {
+            width: 60px;
+            min-width: 60px;
+            max-width: 60px;
         }
         
         .year-detail-view {
@@ -302,6 +332,66 @@
             color: #2d3436;
             line-height: 1.6;
         }
+        
+        /* 検索機能のスタイル */
+        .search-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #667eea;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .search-input:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        .clear-btn {
+            background: linear-gradient(135deg, #a55eea, #8e44ad);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        
+        .clear-btn:hover {
+            background: linear-gradient(135deg, #9c88ff, #7f39fb);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        /* 検索結果のハイライト */
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        
+        /* 非表示列のスタイル */
+        .hidden-column {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -327,8 +417,14 @@
             <div class="stats-summary">
                 <div class="stat-card">
                     <div class="stat-number" id="totalWrestlers">計算中...</div>
-                    <div class="stat-label">総現役選手数</div>
+                    <div class="stat-label" id="totalWrestlersLabel">総現役選手数</div>
                 </div>
+            </div>
+            
+            <!-- 選手名検索機能 -->
+            <div class="search-container">
+                <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" oninput="searchWrestlers()" onkeyup="searchWrestlers()">
+                <button onclick="clearSearch()" class="clear-btn">クリア</button>
             </div>
             
             <div class="controls" id="controls">
@@ -391,6 +487,8 @@
         let currentFilter = null;
         let isFiltered = false;
         let debugVisible = false;
+        let originalData = null; // 検索前のオリジナルデータ保存用
+        let isSearching = false; // 検索中フラグ
 
         debugLog('スクリプト開始 - グローバル変数初期化完了');
 
@@ -1676,7 +1774,10 @@
         function filterByPromotion(promotionName, promotionIndex) {
             debugLog(`団体フィルター開始: ${promotionName} (インデックス: ${promotionIndex})`);
             try {
-                const filteredData = wrestlerData.filter(row => {
+                // 検索中の場合は検索結果から、そうでなければ全データからフィルター
+                const sourceData = isSearching ? getCurrentFilteredData() : wrestlerData;
+                
+                const filteredData = sourceData.filter(row => {
                     const wrestlers = row[promotionIndex];
                     return wrestlers && wrestlers.trim();
                 });
@@ -1697,6 +1798,52 @@
                 debugLog(`団体フィルターエラー: ${error.message}`);
                 console.error(error);
             }
+        }
+
+        // 現在の検索結果データを取得する関数
+        function getCurrentFilteredData() {
+            if (!isSearching) {
+                return wrestlerData;
+            }
+            
+            const searchInput = document.getElementById('wrestlerSearch');
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            
+            if (searchTerm === '') {
+                return wrestlerData;
+            }
+            
+            // 検索結果を再計算
+            const filteredData = wrestlerData.map(row => {
+                const year = row[0];
+                const newRow = [year];
+                
+                // 各団体のセルをチェック
+                for (let i = 1; i < row.length; i++) {
+                    const wrestlers = row[i];
+                    if (wrestlers && wrestlers.trim()) {
+                        // 選手名を分割して検索
+                        const wrestlerList = wrestlers.split('\n')
+                            .filter(name => name.trim())
+                            .filter(name => name.toLowerCase().includes(searchTerm));
+                        
+                        if (wrestlerList.length > 0) {
+                            // マッチした選手名をハイライトなしで返す（団体フィルター用）
+                            newRow.push(wrestlerList.join('\n'));
+                        } else {
+                            newRow.push('');
+                        }
+                    } else {
+                        newRow.push('');
+                    }
+                }
+                
+                // 何らかの結果がある行のみ返す
+                const hasResults = newRow.slice(1).some(cell => cell && cell.trim());
+                return hasResults ? newRow : null;
+            }).filter(row => row !== null);
+            
+            return filteredData;
         }
 
         function showYearDetail(year, yearRow) {
@@ -1826,10 +1973,351 @@
                 document.getElementById('yearDetailView').style.display = 'none';
                 document.getElementById('tableContainer').style.display = 'block';
                 
-                renderTable(wrestlerData);
+                // 検索中の場合は検索結果を再表示
+                if (isSearching) {
+                    searchWrestlers(); // 検索結果を再表示
+                } else {
+                    renderTable(wrestlerData);
+                    updatePromotionHeaders();
+                    calculateTotalWrestlers();
+                    showAllColumns(); // 全ての列を表示
+                    resetColumnWidths(); // 列幅をリセット
+                }
                 debugLog('フィルターリセット完了');
             } catch (error) {
                 debugLog(`フィルターリセットエラー: ${error.message}`);
+            }
+        }
+
+        // 選手名検索機能
+        function searchWrestlers() {
+            const searchInput = document.getElementById('wrestlerSearch');
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            
+            debugLog(`選手検索開始: "${searchTerm}"`);
+            
+            if (searchTerm === '') {
+                // 検索語が空の場合、全データを表示
+                isSearching = false;
+                originalData = null;
+                resetFilter();
+                renderTable(wrestlerData);
+                updatePromotionHeaders();
+                calculateTotalWrestlers();
+                // ラベルを元に戻す
+                document.getElementById('totalWrestlersLabel').textContent = '総現役選手数';
+                // 全ての列を表示状態に戻す
+                showAllColumns();
+                // 列幅をリセット
+                resetColumnWidths();
+                debugLog('検索クリア: 全データ表示');
+                return;
+            }
+            
+            // 検索開始時にオリジナルデータを保存
+            if (!isSearching) {
+                originalData = [...wrestlerData];
+                isSearching = true;
+            }
+            
+            // 検索結果をフィルタリング
+            const filteredData = wrestlerData.map(row => {
+                const year = row[0];
+                const newRow = [year];
+                
+                // 各団体のセルをチェック
+                for (let i = 1; i < row.length; i++) {
+                    const wrestlers = row[i];
+                    if (wrestlers && wrestlers.trim()) {
+                        // 選手名を分割して検索
+                        const wrestlerList = wrestlers.split('\n')
+                            .filter(name => name.trim())
+                            .filter(name => name.toLowerCase().includes(searchTerm));
+                        
+                        if (wrestlerList.length > 0) {
+                            // マッチした選手名をハイライト
+                            const highlightedWrestlers = wrestlerList.map(name => {
+                                const highlightedName = name.replace(
+                                    new RegExp(`(${searchTerm})`, 'gi'),
+                                    '<span class="highlight">$1</span>'
+                                );
+                                return highlightedName;
+                            });
+                            newRow.push(highlightedWrestlers.join('\n'));
+                        } else {
+                            newRow.push('');
+                        }
+                    } else {
+                        newRow.push('');
+                    }
+                }
+                
+                // 何らかの結果がある行のみ返す
+                const hasResults = newRow.slice(1).some(cell => cell && cell.trim());
+                return hasResults ? newRow : null;
+            }).filter(row => row !== null);
+            
+            debugLog(`検索結果: ${filteredData.length}行がマッチ`);
+            
+            // 検索結果を表示
+            renderTable(filteredData);
+            updateSearchResultHeaders(filteredData);
+            calculateSearchResultWrestlers(filteredData);
+            
+            // フィルターやその他の表示をリセット
+            if (isFiltered) {
+                currentFilter = null;
+                isFiltered = false;
+                document.getElementById('controls').style.display = 'none';
+                document.getElementById('yearDetailView').style.display = 'none';
+                document.getElementById('tableContainer').style.display = 'block';
+            }
+        }
+
+        // 検索結果用のヘッダー更新
+        function updateSearchResultHeaders(filteredData) {
+            debugLog('検索結果ヘッダー更新開始');
+            try {
+                const counts = new Array(promotionNames.length).fill(0);
+                
+                filteredData.forEach((row) => {
+                    for (let i = 1; i < row.length && i <= promotionNames.length; i++) {
+                        const wrestlers = row[i];
+                        if (wrestlers && wrestlers.trim()) {
+                            // HTMLタグを除去してカウント
+                            const cleanWrestlers = wrestlers.replace(/<[^>]*>/g, '');
+                            const wrestlerList = cleanWrestlers.split('\n').filter(name => name.trim());
+                            counts[i - 1] += wrestlerList.length;
+                        }
+                    }
+                });
+                
+                const headers = document.querySelectorAll('.promotion-header');
+                headers.forEach((header, index) => {
+                    if (index < promotionNames.length && index < counts.length) {
+                        const promotionName = promotionNames[index];
+                        const count = counts[index];
+                        header.textContent = `${promotionName}(${count})`;
+                        
+                        // 選手数が0の場合は列を非表示にする
+                        if (count === 0) {
+                            header.classList.add('hidden-column');
+                        } else {
+                            header.classList.remove('hidden-column');
+                        }
+                    }
+                });
+                
+                // テーブルボディの対応する列も非表示にする
+                hideEmptyColumnsInTable(counts);
+                
+                // 列幅を調整する（少し遅延させて確実に適用）
+                setTimeout(() => adjustColumnWidths(counts), 50);
+                
+                debugLog('検索結果ヘッダー更新完了');
+            } catch (error) {
+                debugLog(`検索結果ヘッダー更新エラー: ${error.message}`);
+            }
+        }
+
+        // テーブルボディの空の列を非表示にする関数
+        function hideEmptyColumnsInTable(counts) {
+            debugLog('空の列非表示処理開始');
+            try {
+                const tableRows = document.querySelectorAll('#tableBody tr');
+                
+                tableRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    // 最初のセル（年度）は除外して、団体セルのみ処理
+                    for (let i = 1; i < cells.length && i - 1 < counts.length; i++) {
+                        const count = counts[i - 1];
+                        if (count === 0) {
+                            cells[i].classList.add('hidden-column');
+                        } else {
+                            cells[i].classList.remove('hidden-column');
+                        }
+                    }
+                });
+                
+                debugLog('空の列非表示処理完了');
+            } catch (error) {
+                debugLog(`空の列非表示処理エラー: ${error.message}`);
+            }
+        }
+
+        // 全ての列を表示状態に戻す関数
+        function showAllColumns() {
+            debugLog('全列表示処理開始');
+            try {
+                // ヘッダーの表示を戻す
+                const headers = document.querySelectorAll('.promotion-header');
+                headers.forEach(header => {
+                    header.classList.remove('hidden-column');
+                });
+                
+                // テーブルボディの表示を戻す
+                const tableRows = document.querySelectorAll('#tableBody tr');
+                tableRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach(cell => {
+                        cell.classList.remove('hidden-column');
+                    });
+                });
+                
+                debugLog('全列表示処理完了');
+            } catch (error) {
+                debugLog(`全列表示処理エラー: ${error.message}`);
+            }
+        }
+
+        // 動的列幅計算と適用関数
+        function adjustColumnWidths(counts) {
+            debugLog('列幅調整処理開始');
+            try {
+                const tableContainer = document.getElementById('tableContainer');
+                const visibleColumns = counts.filter(count => count > 0).length;
+                
+                if (visibleColumns < promotionNames.length && visibleColumns > 0) {
+                    // 絞り込みが発生している場合
+                    tableContainer.classList.add('filtered');
+                    
+                    // 利用可能な幅を計算（年度列を除く）
+                    const containerWidth = tableContainer.offsetWidth || 1600; // デフォルト値を設定
+                    const yearColumnWidth = 60; // 絞り込み時の年度列の幅
+                    const availableWidth = containerWidth - yearColumnWidth - 80; // マージン考慮
+                    
+                    // 表示されている列数で均等分割（最小120px、最大250px）
+                    const rawColumnWidth = Math.floor(availableWidth / visibleColumns);
+                    const columnWidth = Math.max(120, Math.min(250, rawColumnWidth));
+                    
+                    debugLog(`コンテナ幅: ${containerWidth}px, 利用可能幅: ${availableWidth}px, 表示列数: ${visibleColumns}, 列幅: ${columnWidth}px`);
+                    
+                    // 表示されている列に動的幅を適用
+                    const headers = document.querySelectorAll('.promotion-header');
+                    headers.forEach((header, index) => {
+                        if (index < counts.length) {
+                            if (counts[index] > 0) {
+                                header.style.width = `${columnWidth}px`;
+                                header.style.minWidth = `${columnWidth}px`;
+                                header.style.maxWidth = `${columnWidth}px`;
+                            }
+                        }
+                    });
+                    
+                    // テーブルボディの対応するセルにも適用（少し遅延して適用）
+                    setTimeout(() => {
+                        const tableRows = document.querySelectorAll('#tableBody tr');
+                        tableRows.forEach(row => {
+                            const cells = row.querySelectorAll('td');
+                            for (let i = 1; i < cells.length && i - 1 < counts.length; i++) {
+                                if (counts[i - 1] > 0) {
+                                    cells[i].style.width = `${columnWidth}px`;
+                                    cells[i].style.minWidth = `${columnWidth}px`;
+                                    cells[i].style.maxWidth = `${columnWidth}px`;
+                                }
+                            }
+                        });
+                    }, 100);
+                    
+                    debugLog(`列幅調整完了: ${visibleColumns}列、各列幅${columnWidth}px`);
+                } else {
+                    // 絞り込みがない場合は元の幅に戻す
+                    resetColumnWidths();
+                }
+            } catch (error) {
+                debugLog(`列幅調整エラー: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        // 列幅をリセットする関数
+        function resetColumnWidths() {
+            debugLog('列幅リセット処理開始');
+            try {
+                const tableContainer = document.getElementById('tableContainer');
+                tableContainer.classList.remove('filtered');
+                
+                // CSSカスタムプロパティをリセット
+                document.documentElement.style.removeProperty('--dynamic-column-width');
+                
+                // ヘッダーのスタイルをリセット
+                const headers = document.querySelectorAll('.promotion-header');
+                headers.forEach(header => {
+                    header.style.width = '';
+                    header.style.minWidth = '';
+                    header.style.maxWidth = '';
+                });
+                
+                // テーブルボディのスタイルをリセット
+                const tableRows = document.querySelectorAll('#tableBody tr');
+                tableRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach(cell => {
+                        if (!cell.classList.contains('year-cell')) {
+                            cell.style.width = '';
+                            cell.style.minWidth = '';
+                            cell.style.maxWidth = '';
+                        }
+                    });
+                });
+                
+                debugLog('列幅リセット完了');
+            } catch (error) {
+                debugLog(`列幅リセットエラー: ${error.message}`);
+            }
+        }
+
+        // 検索結果の選手数計算
+        function calculateSearchResultWrestlers(filteredData) {
+            debugLog('検索結果選手数計算開始');
+            let total = 0;
+            try {
+                filteredData.forEach((row) => {
+                    for (let i = 1; i < row.length; i++) {
+                        const wrestlers = row[i];
+                        if (wrestlers && wrestlers.trim()) {
+                            // HTMLタグを除去してカウント
+                            const cleanWrestlers = wrestlers.replace(/<[^>]*>/g, '');
+                            const wrestlerList = cleanWrestlers.split('\n').filter(name => name.trim());
+                            total += wrestlerList.length;
+                        }
+                    }
+                });
+                document.getElementById('totalWrestlers').textContent = total;
+                document.getElementById('totalWrestlersLabel').textContent = '絞り込み後選手数';
+                debugLog(`検索結果選手数: ${total}人`);
+            } catch (error) {
+                debugLog(`検索結果選手数計算エラー: ${error.message}`);
+            }
+        }
+
+        // 検索クリア機能
+        function clearSearch() {
+            debugLog('検索クリア開始');
+            try {
+                const searchInput = document.getElementById('wrestlerSearch');
+                searchInput.value = '';
+                
+                isSearching = false;
+                originalData = null;
+                
+                resetFilter();
+                renderTable(wrestlerData);
+                updatePromotionHeaders();
+                calculateTotalWrestlers();
+                
+                // ラベルを元に戻す
+                document.getElementById('totalWrestlersLabel').textContent = '総現役選手数';
+                
+                // 全ての列を表示状態に戻す
+                showAllColumns();
+                
+                // 列幅をリセット
+                resetColumnWidths();
+                
+                debugLog('検索クリア完了');
+            } catch (error) {
+                debugLog(`検索クリアエラー: ${error.message}`);
             }
         }
 
