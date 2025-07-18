@@ -41,7 +41,7 @@
         }
         
         .debug-controls {
-            margin: 20px 0;
+            margin: 30px 0 10px 0;
             text-align: center;
         }
         
@@ -49,18 +49,20 @@
             background: linear-gradient(135deg, #6c757d, #495057);
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 15px;
             cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            font-size: 10px;
+            font-weight: normal;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
             transition: all 0.3s ease;
+            opacity: 0.7;
         }
         
         .debug-toggle:hover {
             background: linear-gradient(135deg, #495057, #343a40);
             transform: translateY(-1px);
+            opacity: 1;
         }
         
         .debug-info {
@@ -403,17 +405,6 @@
         </div>
         
         <div class="content">
-            <!-- デバッグコントロール -->
-            <div class="debug-controls">
-                <button class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
-            </div>
-            
-            <!-- デバッグ情報表示エリア -->
-            <div class="debug-info" id="debugInfo">
-                <strong>デバッグログ:</strong><br>
-                読み込み開始...<br>
-            </div>
-            
             <div class="stats-summary">
                 <div class="stat-card">
                     <div class="stat-number" id="totalWrestlers">計算中...</div>
@@ -468,6 +459,17 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+            
+            <!-- デバッグコントロール（一番下に小さく配置） -->
+            <div class="debug-controls">
+                <button class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
+            </div>
+            
+            <!-- デバッグ情報表示エリア -->
+            <div class="debug-info" id="debugInfo">
+                <strong>デバッグログ:</strong><br>
+                読み込み開始...<br>
             </div>
         </div>
     </div>
