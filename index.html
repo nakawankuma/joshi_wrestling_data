@@ -261,6 +261,7 @@
         .promotion-header {
             font-size: 11px;
             writing-mode: horizontal-tb;
+            text-orientation: mixed;
             min-width: 120px;
             max-width: 120px;
             transition: min-width 0.3s ease, max-width 0.3s ease;
@@ -285,6 +286,29 @@
             width: 60px;
             min-width: 60px;
             max-width: 60px;
+        }
+
+        /* 携帯での絞り込み時の特別調整 */
+        @media (max-width: 768px) {
+            .table-container.filtered .promotion-header:not(.hidden-column) {
+                min-width: 80px;
+                max-width: 120px;
+                font-size: 9px;
+            }
+            
+            .table-container.filtered td:not(:first-child):not(.hidden-column) {
+                min-width: 80px;
+                max-width: 120px;
+                font-size: 10px;
+            }
+            
+            .table-container.filtered th:first-child,
+            .table-container.filtered td:first-child {
+                width: 40px;
+                min-width: 40px;
+                max-width: 40px;
+                font-size: 9px;
+            }
         }
         
         .year-detail-view {
@@ -393,6 +417,217 @@
         /* 非表示列のスタイル */
         .hidden-column {
             display: none !important;
+        }
+
+        /* レスポンシブデザイン対応 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                margin: 0;
+                border-radius: 10px;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+                margin-bottom: 10px;
+            }
+            
+            .header p {
+                font-size: 14px;
+                margin: 0;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .stats-summary {
+                max-width: 200px;
+                margin: 20px auto;
+            }
+            
+            .stat-card {
+                padding: 15px;
+            }
+            
+            .stat-number {
+                font-size: 1.5rem;
+            }
+            
+            .search-container {
+                flex-direction: column;
+                gap: 10px;
+                max-width: 100%;
+                margin: 15px 0;
+            }
+            
+            .search-input {
+                font-size: 16px;
+                padding: 12px;
+            }
+            
+            .clear-btn {
+                width: 100%;
+                padding: 12px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch;
+            }
+            
+            .back-btn {
+                width: 100%;
+                padding: 12px;
+                font-size: 16px;
+            }
+            
+            .filter-info {
+                text-align: center;
+                margin: 0;
+            }
+            
+            /* テーブル関連の携帯対応 */
+            .table-container {
+                margin: 15px 0;
+                border-radius: 10px;
+            }
+            
+            .table-wrapper {
+                max-height: 60vh;
+            }
+            
+            table {
+                font-size: 11px;
+                min-width: auto;
+            }
+            
+            th, td {
+                padding: 8px 4px;
+                font-size: 10px;
+                /* タッチ操作向けに最小タップ領域を確保 */
+                min-height: 44px;
+            }
+            
+            /* 携帯では固定位置を無効化 */
+            th {
+                position: static !important;
+                top: auto !important;
+                left: auto !important;
+                z-index: auto !important;
+            }
+            
+            th:first-child, td:first-child {
+                min-width: 50px;
+                width: 50px;
+                font-size: 9px;
+                /* 年度セルのタッチ領域を広げる */
+                cursor: pointer;
+                user-select: none;
+                -webkit-touch-callout: none;
+                /* 携帯では固定位置を無効化 */
+                position: static !important;
+                left: auto !important;
+                z-index: auto !important;
+            }
+            
+            td:first-child {
+                /* 年度セルの固定位置も無効化 */
+                position: static !important;
+                left: auto !important;
+                z-index: auto !important;
+            }
+            
+            .promotion-header {
+                min-width: 60px;
+                max-width: 80px;
+                font-size: 9px;
+                /* 携帯では縦書きに変更 */
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+                /* タッチ操作の改善 */
+                cursor: pointer;
+                user-select: none;
+                -webkit-touch-callout: none;
+                /* タップ時のハイライト抑制 */
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            /* 年別詳細ビューの携帯対応 */
+            .year-detail-view {
+                padding: 15px;
+                margin: 15px 0;
+            }
+            
+            .year-title {
+                font-size: 1.2rem;
+                padding: 12px;
+            }
+            
+            .promotion-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .promotion-card {
+                padding: 12px;
+            }
+            
+            .promotion-name-card {
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            
+            .wrestler-names-card {
+                font-size: 13px;
+                line-height: 1.4;
+            }
+            
+            /* デバッグコントロールの調整 */
+            .debug-controls {
+                margin: 20px 0 5px 0;
+            }
+            
+            .debug-toggle {
+                font-size: 9px;
+                padding: 4px 8px;
+            }
+        }
+
+        /* タブレット対応 (769px - 1024px) */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .container {
+                margin: 15px;
+            }
+            
+            .content {
+                padding: 25px;
+            }
+            
+            table {
+                font-size: 12px;
+            }
+            
+            th, td {
+                padding: 10px 6px;
+            }
+            
+            .promotion-header {
+                min-width: 100px;
+                max-width: 110px;
+                font-size: 10px;
+                /* タブレットでは横書きを維持 */
+                writing-mode: horizontal-tb;
+                text-orientation: mixed;
+            }
         }
     </style>
 </head>
