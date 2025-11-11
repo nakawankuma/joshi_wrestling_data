@@ -16,6 +16,7 @@ import re
 import argparse
 import os
 import sys
+import html
 
 class XlsxToHtmlConverter:
     def __init__(self, config_file=None):
@@ -93,7 +94,13 @@ class XlsxToHtmlConverter:
         return promotion_names
 
     def convert_to_js_array(self, df):
-        """DataFrameをJavaScript配列形式に変換（完全なJSON処理）"""
+        """
+        DataFrameをJavaScript配列形式に変換（完全なJSON処理）
+
+        - 年度欄は文字列として扱い、「練習生」などの特殊値にも対応
+        - HTML特殊文字(<, >, &, ", ')を自動的にエスケープ処理
+          例: <選手名> → &lt;選手名&gt;
+        """
         js_array = []
         
         # ヘッダー行を見つける
@@ -113,13 +120,21 @@ class XlsxToHtmlConverter:
         for index, row in df.iterrows():
             if index <= header_row:
                 continue
-                
+
             year = row.iloc[1]
-            if pd.isna(year) or not isinstance(year, (int, float)):
+            if pd.isna(year):
                 continue
-            
-            # 行データを作成（年度は数値、その他は文字列）
-            row_data = [int(year)]
+
+            # 行データを作成（年度は文字列として扱う - 練習生などの特殊値にも対応）
+            # 数値の場合は文字列に変換、既に文字列の場合はそのまま使用
+            if isinstance(year, (int, float)):
+                year_str = str(int(year))
+            else:
+                year_str = str(year).strip()
+
+            # 年度欄もHTMLエスケープ処理を実行
+            year_escaped = html.escape(year_str, quote=True)
+            row_data = [year_escaped]
             
             # データ列を処理（3列目以降）
             for col_idx in range(2, len(row)):
@@ -128,9 +143,11 @@ class XlsxToHtmlConverter:
                 if pd.isna(cell_value):
                     row_data.append("")
                 else:
-                    # セルの値を文字列に変換し、改行文字を保持
+                    # セルの値を文字列に変換し、HTMLエスケープ処理を実行
+                    # <, >, &, ", ' などの特殊文字を &lt;, &gt;, &amp;, &quot;, &#x27; に変換
                     cell_str = str(cell_value).strip()
-                    row_data.append(cell_str)
+                    escaped_str = html.escape(cell_str, quote=True)
+                    row_data.append(escaped_str)
             
             js_array.append(row_data)
         
