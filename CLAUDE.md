@@ -1,12 +1,16 @@
 通常日本語で会話してください。
 プロジェクトの概要はreadme.mdを読み込んでください
 
+### プロジェクト概要
+- Excelでデータをメンテナンスする。
+-  - pythonでindex.htmlに反映する。
+- index.htmlを静的にユーザーは見る
+
 ### 開発プロセス
 - **コメント必須**: コードやメソッドは再度確認できるようにコメントを記載する
 - **YAGNI（You Aren't Gonna Need It）**：今必要じゃない機能は作らない
 - **DRY（Don't Repeat Yourself）**：同じコードを繰り返さない
 - **KISS（Keep It Simple Stupid）**：シンプルに保つ
-- **ClaudeならGEMINIに適宜レビューして貰う。**: gemini -p "{質問}"
 - **テストコード名など使えるところは日本語で**：it名, describe名などはテスト結果を見るために日本語を基本的に使う
 - 保存する日付形式: DateやDateTime形式を使う。UTCで保存する。表示するときにJSTに変換する。
 - 表示する日付形式: YYYY/MM/DDで表示を行なう。stringに変換するのはその方式で行なう
