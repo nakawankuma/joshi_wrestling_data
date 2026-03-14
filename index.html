@@ -365,6 +365,19 @@
             color: #2d3436;
             line-height: 1.6;
         }
+
+        /* Twitter(X)検索リンクアイコン */
+        .twitter-link {
+            color: #000;
+            font-size: 1em;
+            text-decoration: none;
+            margin-left: 3px;
+            opacity: 0.4;
+            vertical-align: middle;
+        }
+        .twitter-link:hover {
+            opacity: 1;
+        }
         
         /* 検索機能のスタイル */
         .search-container {
@@ -2282,7 +2295,11 @@
                         const wrestlers = row[i];
                         
                         if (wrestlers && wrestlers.trim()) {
-                            td.innerHTML = wrestlers.trim().replace(/\n/g, '<br>');
+                            // 各選手名にTwitterリンクを付与して改行で結合
+                            td.innerHTML = wrestlers.trim().split('\n')
+                                .map(name => wrestlerNameWithTwitter(name))
+                                .filter(n => n)
+                                .join('<br>');
                         } else {
                             td.className = 'empty-cell';
                         }
@@ -2314,6 +2331,23 @@
                 debugLog(`ソート切り替えエラー: ${error.message}`);
                 console.error(error);
             }
+        }
+
+        // 選手名にX(Twitter)検索リンクアイコンを付与するヘルパー
+        // name: 選手名（HTMLタグを含む場合あり）
+        function wrestlerNameWithTwitter(name) {
+            const trimmed = name.trim();
+            if (!trimmed) return '';
+            // HTMLタグを除去して検索用の純粋な名前を取得
+            // ()括弧とその中身を削除（例: (休) → 削除）
+            // <>括弧は括弧だけ外して中身は残す（例: <山田花子> → 山田花子）
+            const plainName = trimmed
+                .replace(/<[^>]*>/g, '')        // HTMLタグ除去
+                .replace(/\(.*?\)/g, '')         // ()とその中身を削除
+                .replace(/&lt;|&gt;|[<>]/g, '')  // &lt;&gt;およびそのまま残った<>を除去
+                .trim();
+            const searchUrl = `https://x.com/search?q=${encodeURIComponent(plainName)}&src=typed_query`;
+            return `${trimmed}<a href="${searchUrl}" target="_blank" rel="noopener noreferrer" class="twitter-link" title="${plainName}をXで検索">𝕏</a>`;
         }
 
         // 絞り込み後選手数を別カードに表示するヘルパー
@@ -2504,7 +2538,7 @@
                         html += `
                             <div class="promotion-card">
                                 <div class="promotion-name-card">${yearLabel}</div>
-                                <div class="wrestler-names-card">${wrestlerList.join('<br>')}</div>
+                                <div class="wrestler-names-card">${wrestlerList.map(wrestlerNameWithTwitter).join('<br>')}</div>
                             </div>
                         `;
                     }
@@ -2538,7 +2572,7 @@
                     html += `
                         <div class="promotion-card">
                             <div class="promotion-name-card">${promotion.name}</div>
-                            <div class="wrestler-names-card">${promotion.wrestlers.join('<br>')}</div>
+                            <div class="wrestler-names-card">${promotion.wrestlers.map(wrestlerNameWithTwitter).join('<br>')}</div>
                         </div>
                     `;
                 });
