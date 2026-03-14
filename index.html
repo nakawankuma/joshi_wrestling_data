@@ -268,12 +268,14 @@
         }
         
         /* 絞り込み時の動的列幅調整 */
+        /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
         .table-container.filtered .promotion-header:not(.hidden-column) {
             min-width: 120px;
             max-width: 250px;
             width: auto;
         }
-        
+
+        /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
         .table-container.filtered td:not(:first-child):not(.hidden-column) {
             min-width: 120px;
             max-width: 250px;
@@ -290,12 +292,14 @@
 
         /* 携帯での絞り込み時の特別調整 */
         @media (max-width: 768px) {
+            /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
             .table-container.filtered .promotion-header:not(.hidden-column) {
                 min-width: 80px;
                 max-width: 120px;
                 font-size: 9px;
             }
-            
+
+            /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
             .table-container.filtered td:not(:first-child):not(.hidden-column) {
                 min-width: 80px;
                 max-width: 120px;
@@ -414,7 +418,8 @@
             font-weight: bold;
         }
         
-        /* 非表示列のスタイル */
+        /* 非表示列のスタイル（hidden-column はJSで動的に付与されるクラス） */
+        /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
         .hidden-column {
             display: none !important;
         }
