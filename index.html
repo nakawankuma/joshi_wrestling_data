@@ -366,16 +366,19 @@
             line-height: 1.6;
         }
 
-        /* Twitter(X)検索リンクアイコン */
-        .twitter-link {
-            color: #000;
+        /* X(Twitter)・Wikipedia検索リンクアイコン共通 */
+        .twitter-link,
+        .wikipedia-link {
             font-size: 1em;
             text-decoration: none;
             margin-left: 3px;
             opacity: 0.4;
             vertical-align: middle;
         }
-        .twitter-link:hover {
+        .twitter-link { color: #000; }
+        .wikipedia-link { color: #3366cc; }
+        .twitter-link:hover,
+        .wikipedia-link:hover {
             opacity: 1;
         }
         
@@ -2346,8 +2349,11 @@
                 .replace(/\(.*?\)/g, '')         // ()とその中身を削除
                 .replace(/&lt;|&gt;|[<>]/g, '')  // &lt;&gt;およびそのまま残った<>を除去
                 .trim();
-            const searchUrl = `https://x.com/search?q=${encodeURIComponent(plainName)}&src=typed_query`;
-            return `${trimmed}<a href="${searchUrl}" target="_blank" rel="noopener noreferrer" class="twitter-link" title="${plainName}をXで検索">𝕏</a>`;
+            const xUrl = `https://x.com/search?q=${encodeURIComponent(plainName)}&src=typed_query`;
+            const wikiUrl = `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(plainName)}`;
+            return `${trimmed}`
+                + `<a href="${xUrl}" target="_blank" rel="noopener noreferrer" class="twitter-link" title="${plainName}をXで検索">𝕏</a>`
+                + `<a href="${wikiUrl}" target="_blank" rel="noopener noreferrer" class="wikipedia-link" title="${plainName}をWikipediaで検索">Ｗ</a>`;
         }
 
         // 絞り込み後選手数を別カードに表示するヘルパー
