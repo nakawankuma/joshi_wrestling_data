@@ -79,13 +79,11 @@
         }
         
         .stats-summary {
-            display: grid;
-            grid-template-columns: 1fr;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
             gap: 20px;
             margin: 30px 0;
-            max-width: 300px;
-            margin-left: auto;
-            margin-right: auto;
         }
         
         .stat-card {
@@ -101,6 +99,11 @@
         
         .stat-card:hover {
             transform: translateY(-5px);
+        }
+
+        /* 絞り込みカードは緑色で区別 */
+        .stat-card-filtered {
+            background: linear-gradient(135deg, #00b894, #00a085);
         }
         
         .stat-number {
@@ -648,7 +651,12 @@
             <div class="stats-summary">
                 <div class="stat-card">
                     <div class="stat-number" id="totalWrestlers">計算中...</div>
-                    <div class="stat-label" id="totalWrestlersLabel">総現役選手数</div>
+                    <div class="stat-label">総現役選手数</div>
+                </div>
+                <!-- 絞り込み中のみ表示するカード -->
+                <div class="stat-card stat-card-filtered" id="filteredCard" style="display:none;">
+                    <div class="stat-number" id="filteredWrestlers">0</div>
+                    <div class="stat-label" id="filteredWrestlersLabel">絞り込み後選手数</div>
                 </div>
             </div>
             
@@ -2308,6 +2316,17 @@
             }
         }
 
+        // 絞り込み後選手数を別カードに表示するヘルパー
+        function updateFilteredCount(count) {
+            document.getElementById('filteredWrestlers').textContent = count;
+            document.getElementById('filteredCard').style.display = 'block';
+        }
+
+        // 絞り込みカードを非表示にするヘルパー
+        function hideFilteredCount() {
+            document.getElementById('filteredCard').style.display = 'none';
+        }
+
         function filterByPromotion(promotionName, promotionIndex) {
             debugLog(`団体フィルター開始: ${promotionName} (インデックス: ${promotionIndex})`);
             try {
@@ -2328,6 +2347,16 @@
                     index: promotionIndex
                 };
                 isFiltered = true;
+
+                // 絞り込み後の選手数を計算してstat-cardに反映
+                const promotionCount = filteredResults.reduce((sum, row) => {
+                    const wrestlers = row[promotionIndex];
+                    if (wrestlers && wrestlers.trim()) {
+                        return sum + wrestlers.split('\n').filter(name => name.trim()).length;
+                    }
+                    return sum;
+                }, 0);
+                updateFilteredCount(promotionCount);
 
                 // URLパラメータを更新
                 updateURLParams({
@@ -2406,6 +2435,10 @@
 
                 currentFilter = {type: 'year', value: year, data: promotions};
                 isFiltered = true;
+
+                // 絞り込み後の選手数を計算してstat-cardに反映
+                const yearCount = promotions.reduce((sum, p) => sum + p.wrestlers.length, 0);
+                updateFilteredCount(yearCount);
 
                 // URLパラメータを更新
                 updateURLParams({
@@ -2545,6 +2578,7 @@
                     showAllColumns(); // 全ての列を表示
                     resetColumnWidths(); // 列幅をリセット
                 }
+                hideFilteredCount(); // 絞り込みカードを非表示
                 debugLog('フィルターリセット完了');
             } catch (error) {
                 debugLog(`フィルターリセットエラー: ${error.message}`);
@@ -2570,8 +2604,7 @@
                 renderTable(wrestlerData);
                 updatePromotionHeaders();
                 calculateTotalWrestlers();
-                // ラベルを元に戻す
-                document.getElementById('totalWrestlersLabel').textContent = '総現役選手数';
+                hideFilteredCount(); // 絞り込みカードを非表示
                 // 全ての列を表示状態に戻す
                 showAllColumns();
                 // 列幅をリセット
@@ -2851,8 +2884,7 @@
                         }
                     }
                 });
-                document.getElementById('totalWrestlers').textContent = total;
-                document.getElementById('totalWrestlersLabel').textContent = '絞り込み後選手数';
+                updateFilteredCount(total);
                 debugLog(`検索結果選手数: ${total}人`);
             } catch (error) {
                 debugLog(`検索結果選手数計算エラー: ${error.message}`);
@@ -2876,9 +2908,7 @@
                 renderTable(wrestlerData);
                 updatePromotionHeaders();
                 calculateTotalWrestlers();
-
-                // ラベルを元に戻す
-                document.getElementById('totalWrestlersLabel').textContent = '総現役選手数';
+                hideFilteredCount(); // 絞り込みカードを非表示
 
                 // 全ての列を表示状態に戻す
                 showAllColumns();
