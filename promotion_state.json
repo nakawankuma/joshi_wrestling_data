@@ -1,0 +1,97 @@
+{
+  "updated_at": "2026-03-29T16:34:14.792473+00:00",
+  "promotions": {
+    "Stardom": {
+      "count": 44,
+      "order": 1
+    },
+    "AWG": {
+      "count": 32,
+      "order": 2
+    },
+    "TJPW": {
+      "count": 29,
+      "order": 3
+    },
+    "マリゴ": {
+      "count": 23,
+      "order": 4
+    },
+    "IR/ホットシュシュ": {
+      "count": 17,
+      "order": 5
+    },
+    "Diana": {
+      "count": 13,
+      "order": 6
+    },
+    "マーベラス": {
+      "count": 11,
+      "order": 7
+    },
+    "Venus": {
+      "count": 11,
+      "order": 8
+    },
+    "JTO": {
+      "count": 11,
+      "order": 9
+    },
+    "チョコプロ": {
+      "count": 10,
+      "order": 10
+    },
+    "Pure-J": {
+      "count": 10,
+      "order": 11
+    },
+    "SENDAI": {
+      "count": 9,
+      "order": 12
+    },
+    "なにわ女子": {
+      "count": 9,
+      "order": 13
+    },
+    "LLPW-X": {
+      "count": 7,
+      "order": 14
+    },
+    "シード": {
+      "count": 6,
+      "order": 15
+    },
+    "Wave": {
+      "count": 4,
+      "order": 16
+    },
+    "ガンプロ": {
+      "count": 4,
+      "order": 17
+    },
+    "柳ヶ瀬": {
+      "count": 4,
+      "order": 18
+    },
+    "PPP": {
+      "count": 4,
+      "order": 19
+    },
+    "エボリューション": {
+      "count": 4,
+      "order": 20
+    },
+    "海外": {
+      "count": 8,
+      "order": 21
+    },
+    "その他": {
+      "count": 0,
+      "order": 22
+    },
+    "フリー": {
+      "count": 50,
+      "order": 23
+    }
+  }
+}
