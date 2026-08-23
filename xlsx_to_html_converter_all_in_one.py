@@ -46,6 +46,7 @@ class XlsxToHtmlConverter:
             # デフォルト値を設定
             config.setdefault("sheet_name", 0)
             config.setdefault("encoding", "utf-8")
+            config.setdefault("planner_html_file", "match_card_planner.html")
             
             return config
             
@@ -160,6 +161,74 @@ class XlsxToHtmlConverter:
         js_string = f"const {self.config['js_variable_name']} = {js_array_json};"
         
         return js_string
+
+    def convert_to_roster_data(self, df, promotion_names):
+        """カード検討ツール用の団体別選手データを生成"""
+        header_row = None
+        for index, row in df.iterrows():
+            if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() == "デビュー年":
+                header_row = index
+                break
+
+        if header_row is None:
+            raise Exception("カード検討ツール用データのヘッダー行が見つかりません")
+
+        roster_data = {name: [] for name in promotion_names if name.strip()}
+
+        for index, row in df.iterrows():
+            if index <= header_row or pd.isna(row.iloc[1]):
+                continue
+
+            for promotion_index, promotion_name in enumerate(promotion_names):
+                if not promotion_name.strip():
+                    continue
+
+                column_index = promotion_index + 2
+                if column_index >= len(row):
+                    continue
+
+                cell_value = row.iloc[column_index]
+                if pd.notna(cell_value):
+                    roster_data[promotion_name].append(
+                        html.escape(str(cell_value).strip(), quote=True)
+                    )
+
+        return roster_data
+
+    def update_match_card_planner(self, roster_data, planner_file=None):
+        """カード検討ツール内の団体別選手データを更新"""
+        file_path = planner_file or self.config["planner_html_file"]
+
+        if not os.path.exists(file_path):
+            raise Exception(f"カード検討ツールが見つかりません: {file_path}")
+
+        with open(file_path, 'r', encoding=self.config["encoding"]) as f:
+            content = f.read()
+
+        pattern = r'const\s+rosterData\s*=\s*\{[\s\S]*?\};'
+        if len(re.findall(pattern, content)) != 1:
+            raise Exception("カード検討ツールのrosterDataが一意に見つかりません")
+
+        roster_json = json.dumps(roster_data, ensure_ascii=False, separators=(',', ':'))
+        replacement = f"const rosterData = {roster_json};"
+        # 置換文字列内の \n やバックスラッシュをre.subに解釈させない
+        updated = re.sub(pattern, lambda _: replacement, content, count=1)
+
+        with open(file_path, 'w', encoding=self.config["encoding"]) as f:
+            f.write(updated)
+
+        # 書き戻したJSONを再読込し、欠落や破損がないことを確認
+        with open(file_path, 'r', encoding=self.config["encoding"]) as f:
+            saved = f.read()
+        match = re.search(r'const\s+rosterData\s*=\s*(\{[\s\S]*?\});', saved)
+        if not match or json.loads(match.group(1)) != roster_data:
+            raise Exception("カード検討ツールの選手データ検証に失敗しました")
+
+        wrestler_count = sum(
+            len(cell.splitlines()) for cells in roster_data.values() for cell in cells
+        )
+        print(f"カード検討ツール更新完了: {len(roster_data)}団体 / {wrestler_count}選手")
+        return True
     
     def update_html_headers(self, promotion_names, html_file=None):
         """HTMLファイルのヘッダー部分を更新"""
@@ -348,6 +417,17 @@ class XlsxToHtmlConverter:
             
             # JavaScript配列に変換
             js_array = self.convert_to_js_array(df)
+
+            # カード検討ツール用データも同じExcelから生成
+            roster_data = self.convert_to_roster_data(df, promotion_names)
+            planner_file = self.config["planner_html_file"]
+            if not os.path.exists(planner_file):
+                raise Exception(f"カード検討ツールが見つかりません: {planner_file}")
+            with open(planner_file, 'r', encoding=self.config["encoding"]) as f:
+                planner_content = f.read()
+            planner_pattern = r'const\s+rosterData\s*=\s*\{[\s\S]*?\};'
+            if len(re.findall(planner_pattern, planner_content)) != 1:
+                raise Exception("カード検討ツールのrosterDataが一意に見つかりません")
             
             # HTMLファイルを更新
             self.update_html_file(js_array, html_file)
@@ -377,11 +457,18 @@ class XlsxToHtmlConverter:
                 print("❌ 検証失敗")
                 return False
             print()
+
+            # ステップ4: カード検討ツールも同じ選手データへ更新
+            print("🃏 ステップ4: カード検討ツールの選手データ更新")
+            self.update_match_card_planner(roster_data, planner_file)
+            print("✅ カード検討ツール更新・検証完了")
+            print()
             
             print("🎉 完全変換ワークフロー完了！")
             print()
             target_file = html_file or self.config["html_file"]
             print(f"📁 出力ファイル: {target_file}")
+            print(f"📁 カード検討ツール: {planner_file}")
             print("🔁 このスクリプトは完全に再現性があります")
             
             return True
@@ -395,6 +482,7 @@ def create_sample_config():
     sample_config = {
         "xlsx_file": "woman-excel.xlsx",
         "html_file": "index.html",
+        "planner_html_file": "match_card_planner.html",
         "sheet_name": 0,
         "js_variable_name": "wrestlerData",
         "encoding": "utf-8"

@@ -38,7 +38,7 @@
 ## 選手データの更新
 
 選手データの正本は `woman-excel.xlsx` です。
-Excelの内容を `index.html` へ反映するときは、PowerShellで次を実行します。
+Excelの内容を `index.html` と `match_card_planner.html` の両方へ反映するときは、PowerShellで次を実行します。
 
 ```powershell
 python -m pip install pandas openpyxl
@@ -46,6 +46,7 @@ python .\xlsx_to_html_converter_all_in_one.py
 ```
 
 既定の設定は `converter_config.json` にあります。
+1回の変換で、選手一覧と試合カード組み立てツールの団体・選手データが同時に更新されます。
 
 ## 主なファイル
 

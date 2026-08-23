@@ -1,6 +1,7 @@
 {
     "xlsx_file": "woman-excel.xlsx",
     "html_file": "index.html",
+    "planner_html_file": "match_card_planner.html",
     "sheet_name": 0,
     "data_start_row": 0,
     "year_column": 0,
