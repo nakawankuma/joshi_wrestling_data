@@ -38,6 +38,33 @@
             font-weight: bold;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
+
+        .tool-links {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+
+        .tool-link {
+            display: inline-block;
+            padding: 10px 18px;
+            border: 1px solid rgba(255,255,255,0.75);
+            border-radius: 999px;
+            background: rgba(0,0,0,0.38);
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            backdrop-filter: blur(4px);
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .tool-link:hover,
+        .tool-link:focus-visible {
+            background: rgba(0,0,0,0.62);
+            transform: translateY(-1px);
+        }
         
         .content {
             padding: 30px;
@@ -664,6 +691,9 @@
         <div class="header">
             <h1>🤼‍♀️ 女子プロレス選手一覧表 🤼‍♀️</h1>
             <p>現役選手のデビュー年・団体別完全データ</p>
+            <nav class="tool-links" aria-label="関連ツール">
+                <a class="tool-link" href="match_card_planner.html">試合カードを組み立てる</a>
+            </nav>
         </div>
         
         <div class="content">
