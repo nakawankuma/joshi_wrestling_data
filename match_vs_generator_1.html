@@ -101,6 +101,26 @@
     padding:9px;
     margin-top:6px;
   }
+  .manual-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin:10px 0 4px;
+  }
+  .manual-actions button,
+  .insert-actions button{
+    background:#17352d;
+    color:var(--accent);
+    border:1px solid var(--accent);
+  }
+  .insert-actions{
+    display:flex;
+    gap:8px;
+    padding:0 14px 14px;
+  }
+  .insert-actions button{flex:1;font-size:11px;padding:7px;}
+  .section-editor{border-color:#54746e;}
+  .section-editor .match-head .no{color:#b7eadf;}
   .btn-zip{
     background:#3a3e46;
     color:var(--accent);
@@ -237,6 +257,13 @@
     <textarea id="rawText" placeholder="1、20分1本勝負&#10;朱里＆壮麗亜美＆…（8分24秒、片エビ固め）刀羅ナツコ＆…&#10;※備考"></textarea>
     <button class="btn-main" id="parseBtn">解析してカードを作成</button>
     <div class="warn" id="parseWarn"></div>
+
+    <h2>手作業で追加</h2>
+    <div class="manual-actions">
+      <button type="button" id="addManualMatch">＋ 試合を追加</button>
+      <button type="button" id="addSection">＋ コーナーを追加</button>
+    </div>
+    <p class="meta">追加後、各カード下のボタンから途中にも挿入できます。</p>
 
     <h2>共通デザイン設定</h2>
     <div class="row2">
@@ -434,6 +461,27 @@ function stripRuleTime(rule){
 
 /* ========== 状態管理 ========== */
 let matches = [];
+
+function nextMatchNo(){
+  const numbers=matches.filter(item=>item.type!=='section').map(item=>+item.no).filter(Number.isFinite);
+  return numbers.length ? Math.max(...numbers)+1 : 1;
+}
+
+function createBlankMatch(){
+  const groups=[0,1].map(()=>({members:[{name:'',mark:''}]}));
+  return {type:'match',no:nextMatchNo(),rule:'',isTitle:false,titleMode:'none',championGroup:-1,
+    time:'',technique:'',leftTeam:groups[0].members,rightTeam:groups[1].members,
+    groups,notes:[],parseOk:true};
+}
+
+function createBlankSection(){
+  return {type:'section',title:'歌のコーナー'};
+}
+
+function insertItemAfter(index,item){
+  matches.splice(index+1,0,item);
+  renderMatchList();
+}
 
 function commonSettings() {
   return {
@@ -687,6 +735,29 @@ function renderMatchList(){
   }
 
   matches.forEach((match, mi) => {
+    if(match.type==='section'){
+      const wrap=document.createElement('div');
+      wrap.className='match-editor section-editor';
+      wrap.innerHTML=`
+        <div class="match-head">
+          <span class="no">コーナーカード</span>
+          <button class="del-match" data-mi="${mi}">このカードを削除</button>
+        </div>
+        <div class="match-body">
+          <div class="form-col">
+            <label>表示するタイトル</label>
+            <input type="text" data-field="title" data-mi="${mi}" value="${escapeAttr(match.title)}" placeholder="例：○○○の歌のコーナー">
+          </div>
+          <div class="canvas-col">
+            <canvas data-mi="${mi}"></canvas>
+            <button class="dl-single" data-mi="${mi}">このカードをPNGで保存</button>
+          </div>
+        </div>
+        ${insertActions(mi)}
+      `;
+      listEl.appendChild(wrap);
+      return;
+    }
     const wrap = document.createElement('div');
     wrap.className = 'match-editor';
 
@@ -728,6 +799,7 @@ function renderMatchList(){
           <button class="dl-single" data-mi="${mi}">この試合をPNGで保存</button>
         </div>
       </div>
+      ${insertActions(mi)}
     `;
     listEl.appendChild(wrap);
 
@@ -736,6 +808,13 @@ function renderMatchList(){
 
   bindMatchListEvents();
   redrawAllCanvases();
+}
+
+function insertActions(mi){
+  return `<div class="insert-actions">
+    <button type="button" class="insert-match" data-mi="${mi}">＋ この下に試合</button>
+    <button type="button" class="insert-section" data-mi="${mi}">＋ この下にコーナー</button>
+  </div>`;
 }
 
 function renderGroups(wrap, mi, match){
@@ -853,14 +932,23 @@ function bindMatchListEvents(){
     });
   });
 
+  listEl.querySelectorAll('.insert-match').forEach(el=>{
+    el.addEventListener('click',()=>insertItemAfter(+el.dataset.mi,createBlankMatch()));
+  });
+  listEl.querySelectorAll('.insert-section').forEach(el=>{
+    el.addEventListener('click',()=>insertItemAfter(+el.dataset.mi,createBlankSection()));
+  });
+
   listEl.querySelectorAll('.dl-single').forEach(el => {
     el.addEventListener('click', () => {
       const mi = +el.dataset.mi;
-      const problem=validateMatch(matches[mi]);
+      const problem=validateItem(matches[mi]);
       if(problem){alert(`画像を保存できません。\n${problem}`);return;}
       const canvas = listEl.querySelector(`canvas[data-mi="${mi}"]`);
       const link = document.createElement('a');
-      link.download = `match_${String(matches[mi].no).padStart(2,'0')}.png`;
+      link.download = matches[mi].type==='section'
+        ? `section_${String(mi+1).padStart(2,'0')}.png`
+        : `match_${String(matches[mi].no).padStart(2,'0')}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     });
@@ -869,15 +957,32 @@ function bindMatchListEvents(){
 
 function redrawOne(mi){
   const canvas = document.querySelector(`#matchList canvas[data-mi="${mi}"]`);
-  if (canvas) drawMatch(canvas, matches[mi], commonSettings());
+  if (canvas) drawItem(canvas, matches[mi], commonSettings());
 }
 
 function redrawAllCanvases(){
   const settings = commonSettings();
   document.querySelectorAll('#matchList canvas').forEach(canvas => {
     const mi = +canvas.dataset.mi;
-    drawMatch(canvas, matches[mi], settings);
+    drawItem(canvas, matches[mi], settings);
   });
+}
+
+function drawItem(canvas,item,settings){
+  if(item.type==='section')drawSection(canvas,item.title,settings);
+  else drawMatch(canvas,item,settings);
+}
+
+function drawSection(canvas,title,settings){
+  const sectionCanvas=createSectionCanvas(title||'',settings);
+  canvas.width=sectionCanvas.width;
+  canvas.height=sectionCanvas.height;
+  canvas.getContext('2d').drawImage(sectionCanvas,0,0);
+}
+
+function validateItem(item){
+  if(item.type==='section')return String(item.title||'').trim()?'':'コーナー名を入力してください。';
+  return validateMatch(item);
 }
 
 function validateMatch(match){
@@ -909,8 +1014,13 @@ function createSectionCanvas(label, settings) {
   ctx.fillStyle = settings.textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `bold ${Math.round(settings.size*0.34)}px "Yu Gothic UI","Meiryo",sans-serif`;
-  ctx.fillText(label, settings.size/2, settings.size/2);
+  let fontSize=Math.round(settings.size*0.34);
+  do {
+    ctx.font = `bold ${fontSize}px "Yu Gothic UI","Meiryo",sans-serif`;
+    if(ctx.measureText(label).width<=settings.size*0.84)break;
+    fontSize-=Math.max(2,Math.round(settings.size*0.01));
+  } while(fontSize>Math.round(settings.size*0.07));
+  ctx.fillText(label, settings.size/2, settings.size/2, settings.size*0.84);
   return canvas;
 }
 
@@ -943,6 +1053,15 @@ document.getElementById('parseBtn').addEventListener('click', () => {
   }
 });
 
+document.getElementById('addManualMatch').addEventListener('click',()=>{
+  matches.push(createBlankMatch());
+  renderMatchList();
+});
+document.getElementById('addSection').addEventListener('click',()=>{
+  matches.push(createBlankSection());
+  renderMatchList();
+});
+
 document.getElementById('redrawAll').addEventListener('click', redrawAllCanvases);
 
 ['size','bgType','textColor','accentColor','showTitleTag','showTimeTech','showNotes'].forEach(id => {
@@ -956,9 +1075,11 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
     statusEl.textContent = '出力対象の試合がありません。先にテキストを解析してください。';
     return;
   }
-  const problems=matches.map((match,index)=>({index,problem:validateMatch(match)})).filter(x=>x.problem);
+  const problems=matches.map((match,index)=>({index,problem:validateItem(match)})).filter(x=>x.problem);
   if(problems.length){
-    statusEl.textContent=problems.map(x=>`第${matches[x.index].no}試合：${x.problem}`).join('　');
+    statusEl.textContent=problems.map(x=>matches[x.index].type==='section'
+      ? `コーナーカード${x.index+1}：${x.problem}`
+      : `第${matches[x.index].no}試合：${x.problem}`).join('　');
     return;
   }
   try {
@@ -974,10 +1095,14 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
 
     for (let mi=0; mi<matches.length; mi++){
       const canvas = document.querySelector(`#matchList canvas[data-mi="${mi}"]`);
-      drawMatch(canvas, matches[mi], settings);
+      drawItem(canvas, matches[mi], settings);
       const blob = await canvasToPngBlob(canvas);
-      const matchNo = String(matches[mi].no).padStart(2, '0');
-      zip.file(`${sequence(mi + 1)}_match_${matchNo}.png`, blob);
+      if(matches[mi].type==='section'){
+        zip.file(`${sequence(mi + 1)}_section.png`, blob);
+      }else{
+        const matchNo = String(matches[mi].no).padStart(2, '0');
+        zip.file(`${sequence(mi + 1)}_match_${matchNo}.png`, blob);
+      }
     }
 
     const edBlob = await canvasToPngBlob(createSectionCanvas('ED', settings));
@@ -988,7 +1113,7 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
     link.download = 'vs_cards.zip';
     link.href = URL.createObjectURL(content);
     link.click();
-    statusEl.textContent = `OP・${matches.length}試合・EDのPNGをZIPにまとめてダウンロードしました。`;
+    statusEl.textContent = `OP・${matches.length}枚のカード・EDをZIPにまとめてダウンロードしました。`;
   } catch (error) {
     statusEl.textContent = `ZIPの作成に失敗しました：${error.message}`;
   }
