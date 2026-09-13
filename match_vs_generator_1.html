@@ -165,10 +165,19 @@
     margin-bottom:8px;
   }
   .team-block .team-label{
-    font-size:11px;
-    color:var(--sub);
+    font-size:14px;
+    font-weight:800;
+    color:var(--accent);
     margin-bottom:6px;
   }
+  .groups{display:grid; gap:10px; margin-top:10px;}
+  .add-group{
+    width:100%; min-height:44px; margin:2px 0 12px;
+    background:#17352d; color:var(--accent); border:1px solid var(--accent);
+    font-size:14px; font-weight:800;
+  }
+  .del-group{width:100%;margin-top:6px;background:#3a2226;color:var(--danger);}
+  .del-group:disabled{opacity:.35;cursor:not-allowed;}
   .member-row{
     display:grid;
     grid-template-columns:50px 1fr 26px;
@@ -189,8 +198,8 @@
     border:1px dashed var(--border);
     color:var(--sub);
     width:100%;
-    font-size:11px;
-    padding:5px;
+    font-size:13px;
+    padding:8px;
     margin-top:2px;
   }
   .inline-fields{
@@ -261,7 +270,7 @@
     </div>
     <div class="checkline">
       <input type="checkbox" id="showTitleTag" checked>
-      <span>「王者」「挑戦者」ラベルを表示する</span>
+      <span>タイトル結果（王座防衛・新王者・王者陥落）を表示する</span>
     </div>
     <div class="checkline">
       <input type="checkbox" id="showTimeTech" checked>
@@ -330,7 +339,9 @@ function parseMatches(text) {
 
 function parseSingleMatch(m) {
   const bodyRaw = m.bodyLines.join('');
-  const isTitle = bodyRaw.includes('<王者>') && bodyRaw.includes('<挑戦者>');
+  const championTagRe = /[<＜](?:現?王者)(?:組)?[>＞]/;
+  const challengerTagRe = /[<＜]挑戦者(?:組)?[>＞]/;
+  const isTitle = championTagRe.test(bodyRaw) && challengerTagRe.test(bodyRaw);
 
   // 全角数字（０-９）も半角数字と同様に数字として扱う
   const digit = '[0-9０-９]';
@@ -355,8 +366,11 @@ function parseSingleMatch(m) {
     parseOk = false; // 決着情報が見つからない = 手動確認が必要
   }
 
-  leftRaw = leftRaw.replace('<王者>', '').replace('<挑戦者>', '');
-  rightRaw = rightRaw.replace('<王者>', '').replace('<挑戦者>', '');
+  const leftWasChampion = championTagRe.test(leftRaw);
+  const rightWasChampion = championTagRe.test(rightRaw);
+  const titleTagRe = /[<＜](?:現?王者|挑戦者)(?:組)?[>＞]/g;
+  leftRaw = leftRaw.replace(titleTagRe, '');
+  rightRaw = rightRaw.replace(titleTagRe, '');
 
   function parseSide(raw) {
     const names = raw.split('＆').map(s => s.trim()).filter(s => s.length > 0);
@@ -375,15 +389,34 @@ function parseSingleMatch(m) {
   const rightTeam = parseSide(rightRaw);
   if (leftTeam.length === 0 || rightTeam.length === 0) parseOk = false;
 
+  const groups = [leftTeam, rightTeam].map(members=>({members}));
+
+  // 「3WAY...」かつ「もう1組は、...」の形式では、備考から第3グループを復元する。
+  const wayMatch = m.ruleLine.match(/([3-9３-９])\s*(?:WAY|ＷＡＹ)/i);
+  const expectedGroups = wayMatch ? +toHalfWidthDigits(wayMatch[1]) : 2;
+  const remainingNotes=[];
+  for(const note of m.noteLines){
+    const extraMatch=note.match(/^(.*?)(?:。)?もう1組は[、,:：]\s*(.+)$/);
+    if(extraMatch && groups.length<expectedGroups){
+      groups.push({members:parseSide(extraMatch[2])});
+      const noteBeforeGroup=extraMatch[1].replace(/。\s*$/,'').trim();
+      if(noteBeforeGroup)remainingNotes.push(noteBeforeGroup);
+    } else remainingNotes.push(note);
+  }
+
+  if(groups.length!==expectedGroups || groups.some(group=>!group.members.length))parseOk=false;
   return {
     no: m.no,
     rule: m.ruleLine,
     isTitle,
+    titleMode: isTitle ? 'title' : 'none',
+    championGroup: leftWasChampion ? 0 : (rightWasChampion ? 1 : -1),
     time,
     technique,
     leftTeam: leftTeam.length ? leftTeam : [{name:'', mark:''}],
     rightTeam: rightTeam.length ? rightTeam : [{name:'', mark:''}],
-    notes: m.noteLines,
+    groups,
+    notes: remainingNotes,
     parseOk
   };
 }
@@ -431,10 +464,14 @@ function drawMatch(canvas, match, settings) {
   ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, size-ctx.lineWidth, size-ctx.lineWidth);
 
   ctx.textBaseline = 'middle';
-  const rows = Math.max(match.leftTeam.length, match.rightTeam.length);
+  const groups = match.groups || [
+    {members:match.leftTeam || []},
+    {members:match.rightTeam || []}
+  ];
   const hasResultLine = settings.showTimeTech && (match.time || match.technique);
   const hasNotes = settings.showNotes && match.notes.length;
-  const hasTitleTag = settings.showTitleTag && match.isTitle;
+  const titleMode = match.titleMode || (match.isTitle ? 'title' : 'none');
+  const hasTitleTag = settings.showTitleTag && titleMode !== 'none';
 
   // ---- 上部：試合番号＋大会名（端まで広く使い、長さに応じて自動調整） ----
   const headerMaxWidth = size*0.94; // 左右3%ずつの余白まで詰める
@@ -442,6 +479,7 @@ function drawMatch(canvas, match, settings) {
   ctx.fillStyle = settings.textColor;
   ctx.textAlign = 'left';
   const cleanRule = stripRuleTime(match.rule);
+  const formatText = groups.length === 2 ? 'VS' : `${groups.length}WAY`;
   const headerText = cleanRule ? `第${match.no}試合　${cleanRule}` : `第${match.no}試合`;
 
   let headerSize = headerBaseSize;
@@ -450,24 +488,16 @@ function drawMatch(canvas, match, settings) {
     headerSize -= 1;
     ctx.font = `bold ${headerSize}px "Yu Gothic UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif`;
   }
-  ctx.fillText(headerText, size*0.03, size*0.045);
+  ctx.fillText(headerText, size*0.03, size*0.042);
 
-  // ---- 王者/挑戦者ラベル：ヘッダー行のすぐ下、名前ブロックの外側に1回だけ ----
-  let nameAreaTop = size*0.11;
-  if (hasTitleTag) {
-    const tagSize = Math.round(size*0.026);
-    ctx.font = `${tagSize}px "Yu Gothic UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif`;
-    ctx.fillStyle = settings.accentColor;
-    ctx.textAlign = 'left';
-    ctx.fillText('王者', size*0.05, size*0.10);
-    ctx.textAlign = 'right';
-    ctx.fillText('挑戦者', size*0.95, size*0.10);
-    nameAreaTop = size*0.145;
-  }
+  // 試合形式は結果カードの要点なので、ルールより大きく中央表示する
+  ctx.textAlign = 'center';
+  ctx.fillStyle = settings.accentColor;
+  ctx.font = `900 ${Math.round(size*0.052)}px "Yu Gothic UI",sans-serif`;
+  ctx.fillText(formatText, size/2, size*0.098);
 
-  // ---- 名前エリア：段間を詰め、中央のVS軸に寄せたタイトな配置 ----
-  const nameAreaBottom = (hasResultLine || hasNotes) ? size*0.88 : size*0.95;
-  const rawAreaHeight = nameAreaBottom - nameAreaTop;
+  const nameAreaTop = size*0.14;
+  const nameAreaBottom = (hasResultLine || hasNotes) ? size*0.86 : size*0.95;
 
   // 選手名中の <補足> / ＜補足＞ は、名前本体とは別の小さい行として描画する
   function splitDisplayName(name) {
@@ -478,47 +508,6 @@ function drawMatch(canvas, match, settings) {
     }).trim();
     return { main, annotation: annotations.join(' ') };
   }
-
-  // 文字サイズ：段数が少ないほど大きく。まず「詰めた場合の理想サイズ」を決める
-  const allNames = [...match.leftTeam, ...match.rightTeam]
-    .map(m => splitDisplayName(m.name).main || m.name || '');
-  const longestLen = Math.max(1, ...allNames.map(n => n.length));
-  const nameAreaHalfWidth = size*0.40;             // 中央から左右にどこまで名前が伸びてよいか
-  const widthLimitedSize = Math.floor(nameAreaHalfWidth / (longestLen * 0.58));
-  const sizeCapByRows = size*(rows<=2?0.13:(rows<=3?0.09:0.075));
-  const nameSize = Math.max(size*0.026, Math.min(widthLimitedSize, sizeCapByRows));
-
-  // 段間隔は文字サイズを基準にタイトに（間延びさせない）。ただし理想の全体高さが
-  // 使える領域を超えないよう、必要なら詰め直す
-  let rowGap = nameSize * 1.9;
-  const idealTotalHeight = rowGap * rows;
-  if (idealTotalHeight > rawAreaHeight) {
-    rowGap = rawAreaHeight / rows;
-  }
-  const totalHeight = rowGap * rows;
-  const startY = nameAreaTop + (rawAreaHeight - totalHeight)/2 + rowGap/2;
-
-  const markSize = Math.round(nameSize * 0.36); // 丸マークの半径基準（図形描画）
-  const markGap = size*0.018;                    // マークと名前の隙間
-  const centerGap = size*0.012;                  // 名前と中央VSラインの隙間（詰める）
-  const centerX = size/2;
-
-  // VS文字の実寸を先に測っておき、1段目だけVSとぶつからないよう名前の開始位置を押し出す
-  const vsFontSize = Math.round(size*0.038);
-  ctx.font = `bold ${vsFontSize}px "Yu Gothic UI",sans-serif`;
-  const vsWidth = ctx.measureText('VS').width;
-  const vsHalfSpace = vsWidth/2 + size*0.025; // VSの左右に確保する空白
-
-  // 左側：中央に近い側から「名前」→「隙間」→「マーク」の順（マークは中央寄り外側）
-  const leftNameRightEdge = centerX - centerGap;
-  const leftNameRightEdgeRow0 = centerX - vsHalfSpace;
-  const leftNameMaxWidth = nameAreaHalfWidth;
-
-  const rightNameLeftEdge = centerX + centerGap;
-  const rightNameLeftEdgeRow0 = centerX + vsHalfSpace;
-  const rightNameMaxWidth = nameAreaHalfWidth;
-
-  ctx.fillStyle = settings.textColor;
 
   function fitFont(text, maxWidth, baseSize, weight){
     let fs = baseSize;
@@ -552,61 +541,116 @@ function drawMatch(canvas, match, settings) {
     }
   }
 
-  function drawMember(member, edge, maxWidth, align, y) {
+  function drawMember(member, cx, maxWidth, y, baseSize) {
     if (!member || !member.name) return;
 
     const { main, annotation } = splitDisplayName(member.name);
-    const markSpace = markSize*2 + markGap;
+    const markSize = Math.round(baseSize * 0.25);
+    const markGap = size*0.012;
+    const markSpace = member.mark ? markSize*2 + markGap : 0;
     const availWidth = member.mark ? maxWidth - markSpace : maxWidth;
-    const mainY = annotation ? y - nameSize*0.22 : y;
-    const annotationY = y + nameSize*0.42;
-    let markAnchorWidth = 0;
+    const mainY = annotation ? y - baseSize*0.18 : y;
+    const annotationY = y + baseSize*0.40;
 
     if (main) {
-      fitFont(main, availWidth, nameSize, 'bold');
-      ctx.textAlign = align;
+      fitFont(main, availWidth, baseSize, 'bold');
+      ctx.textAlign = 'center';
       ctx.fillStyle = settings.textColor;
-      ctx.fillText(main, edge, mainY, availWidth);
-      markAnchorWidth = Math.min(ctx.measureText(main).width, availWidth);
+      ctx.fillText(main, cx, mainY, availWidth);
     }
 
     if (annotation) {
-      const annotationSize = Math.max(size*0.016, nameSize*0.34);
+      const annotationSize = Math.max(size*0.015, baseSize*0.32);
       fitFont(annotation, availWidth, annotationSize, 'normal');
-      ctx.textAlign = align;
+      ctx.textAlign = 'center';
       ctx.fillStyle = settings.textColor;
-      ctx.fillText(annotation, edge, annotationY, availWidth);
-      if (!main) markAnchorWidth = Math.min(ctx.measureText(annotation).width, availWidth);
+      ctx.fillText(annotation, cx, annotationY, availWidth);
     }
 
     if (member.mark) {
-      const direction = align === 'right' ? -1 : 1;
-      const markCx = edge + direction*(markAnchorWidth + markGap + markSize);
+      fitFont(main || annotation, availWidth, baseSize, 'bold');
+      const textWidth = Math.min(ctx.measureText(main || annotation).width, availWidth);
+      const markCx = cx - textWidth/2 - markGap - markSize;
       drawMark(member.mark, markCx, mainY, markSize);
     }
   }
 
-  for (let i=0;i<rows;i++){
-    const y = startY + rowGap*i;
-    const l = match.leftTeam[i];
-    const r = match.rightTeam[i];
-    const isRow0 = (i===0);
-    const leftEdge = isRow0 ? leftNameRightEdgeRow0 : leftNameRightEdge;
-    const rightEdge = isRow0 ? rightNameLeftEdgeRow0 : rightNameLeftEdge;
-    const leftMaxW = isRow0 ? (leftNameMaxWidth - (centerX - leftEdge)) : leftNameMaxWidth;
-    const rightMaxW = isRow0 ? (rightNameMaxWidth - (rightEdge - centerX)) : rightNameMaxWidth;
+  const winnerGroupIndexes=groups.map((group,index)=>group.members?.some(member=>member.mark==='○')?index:-1).filter(index=>index>=0);
+  function groupResult(index){
+    if(winnerGroupIndexes.length!==1)return 'unknown';
+    return winnerGroupIndexes[0]===index?'winner':'loser';
+  }
 
-    drawMember(l, leftEdge, leftMaxW, 'right', y);
-    drawMember(r, rightEdge, rightMaxW, 'left', y);
+  function titleOutcome(index){
+    const result=groupResult(index);
+    if (!hasTitleTag) return '';
+    if (titleMode === 'vacant') return result === 'winner' ? '新王者' : '';
+    if (titleMode !== 'title' || match.championGroup < 0) return '';
+    if (index === match.championGroup) return result === 'winner' ? '王座防衛' : (result === 'loser' ? '王者陥落' : '試合前王者');
+    return result === 'winner' ? '新王者' : '';
+  }
 
-    // VSは最初の段のみ、中央にしっかり大きく配置
-    if (i===0) {
-      ctx.textAlign = 'center';
-      ctx.font = `bold ${vsFontSize}px "Yu Gothic UI",sans-serif`;
+  function drawGroup(group, index, x, y, w, h, compactTeam=false){
+    const result=groupResult(index);
+    const winner = result === 'winner';
+    ctx.save();
+    ctx.strokeStyle = winner ? settings.accentColor : settings.textColor;
+    ctx.lineWidth = winner ? Math.max(5,size*0.009) : Math.max(2,size*0.003);
+    ctx.strokeRect(x,y,w,h);
+    if (winner) {
+      ctx.globalAlpha = settings.bgType === 'black' ? 0.18 : 0.09;
       ctx.fillStyle = settings.accentColor;
-      ctx.fillText('VS', centerX, y);
-      ctx.fillStyle = settings.textColor;
+      ctx.fillRect(x,y,w,h);
+      ctx.globalAlpha = 1;
     }
+    // 敗者表示は増やさない。太枠とWINだけで勝者を示し、名前の表示面積を優先する。
+    const badge = winner ? 'WIN' : '';
+    if (badge) {
+      ctx.textAlign='left'; ctx.fillStyle=settings.accentColor;
+      ctx.font=`900 ${Math.round(size*0.024)}px "Yu Gothic UI",sans-serif`;
+      ctx.fillText(badge,x+size*0.014,y+size*0.025);
+    }
+    const title = titleOutcome(index);
+    if (title) {
+      ctx.textAlign='right'; ctx.fillStyle=settings.accentColor;
+      ctx.font=`900 ${Math.round(size*0.027)}px "Yu Gothic UI",sans-serif`;
+      ctx.fillText(title,x+w-size*0.014,y+size*0.025,w*0.55);
+    }
+    const members = group.members && group.members.length ? group.members : [{name:'',mark:''}];
+    if(compactTeam){
+      // 3WAY以上は1グループ1行。縦積みを避け、サムネイルでも読める文字サイズを確保する。
+      const teamText=members.map(member=>{
+        const display=splitDisplayName(member.name);
+        return `${member.mark||''}${display.main||member.name||''}`;
+      }).filter(Boolean).join('＆');
+      const maxWidth=w-size*0.07;
+      const baseSize=Math.min(size*0.105,h*0.48);
+      fitFont(teamText,maxWidth,baseSize,'900');
+      ctx.textAlign='center';
+      ctx.fillStyle=settings.textColor;
+      ctx.fillText(teamText,x+w/2,y+h*0.57,maxWidth);
+      ctx.restore();
+      return;
+    }
+    const memberTop = y + size*0.045;
+    const memberH = Math.max(size*0.05,(h-size*0.055)/members.length);
+    const baseSize = Math.min(size*0.115, memberH*0.62);
+    members.forEach((member,mi)=>drawMember(member,x+w/2,w-size*0.06,memberTop+memberH*(mi+0.5),baseSize));
+    ctx.restore();
+  }
+
+  const areaH = nameAreaBottom-nameAreaTop;
+  if (groups.length === 2) {
+    const gap=size*0.055, w=(size*0.94-gap)/2;
+    drawGroup(groups[0],0,size*0.03,nameAreaTop,w,areaH);
+    drawGroup(groups[1],1,size*0.03+w+gap,nameAreaTop,w,areaH);
+    ctx.textAlign='center'; ctx.fillStyle=settings.accentColor;
+    ctx.font=`900 ${Math.round(size*0.04)}px "Yu Gothic UI",sans-serif`;
+    ctx.fillText('VS',size/2,nameAreaTop+areaH/2);
+  } else {
+    // 3WAY以上は横幅を全て名前に使う帯レイアウト。装飾より文字サイズを優先する。
+    const gap=size*0.012, h=(areaH-gap*(groups.length-1))/groups.length;
+    groups.forEach((group,index)=>drawGroup(group,index,size*0.03,nameAreaTop+index*(h+gap),size*0.94,h,true));
   }
 
   // ---- 下端：決着時間・技（小さく、端に寄せる） ----
@@ -615,7 +659,7 @@ function drawMatch(canvas, match, settings) {
     ctx.textAlign = 'center';
     ctx.fillStyle = settings.textColor;
     const line = [match.time, match.technique].filter(Boolean).join('　');
-    ctx.fillText(line, centerX, size*0.905, size*0.85);
+    ctx.fillText(line, size/2, size*0.895, size*0.85);
   }
 
   // ---- 備考（さらに小さく最下端） ----
@@ -623,7 +667,7 @@ function drawMatch(canvas, match, settings) {
     ctx.font = `${Math.round(size*0.02)}px "Yu Gothic UI",sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillStyle = settings.accentColor;
-    ctx.fillText('※' + match.notes.join('　'), centerX, size*0.955, size*0.85);
+    ctx.fillText('※' + match.notes.join('　'), size/2, size*0.955, size*0.85);
   }
 }
 
@@ -656,22 +700,15 @@ function renderMatchList(){
           <label>試合ルール表記</label>
           <input type="text" data-field="rule" data-mi="${mi}" value="${escapeAttr(match.rule)}">
 
-          <div class="checkline">
-            <input type="checkbox" data-field="isTitle" data-mi="${mi}" ${match.isTitle?'checked':''}>
-            <span>タイトルマッチ（王者/挑戦者ラベルを付ける）</span>
-          </div>
+          <label>タイトル区分</label>
+          <select data-field="titleMode" data-mi="${mi}">
+            <option value="none" ${(match.titleMode||'none')==='none'?'selected':''}>非タイトル戦</option>
+            <option value="title" ${match.titleMode==='title'?'selected':''}>通常タイトル戦</option>
+            <option value="vacant" ${match.titleMode==='vacant'?'selected':''}>王者決定戦</option>
+          </select>
 
-          <div class="team-block" data-team="left" data-mi="${mi}">
-            <div class="team-label">左チーム</div>
-            <div class="members"></div>
-            <button class="add-member" data-team="left" data-mi="${mi}">＋ メンバー追加</button>
-          </div>
-
-          <div class="team-block" data-team="right" data-mi="${mi}">
-            <div class="team-label">右チーム</div>
-            <div class="members"></div>
-            <button class="add-member" data-team="right" data-mi="${mi}">＋ メンバー追加</button>
-          </div>
+          <div class="groups" data-mi="${mi}"></div>
+          <button class="add-group" type="button" data-mi="${mi}">＋ 対戦グループ追加</button>
 
           <div class="inline-fields">
             <div>
@@ -694,21 +731,36 @@ function renderMatchList(){
     `;
     listEl.appendChild(wrap);
 
-    renderMembers(wrap, mi, 'left', match.leftTeam);
-    renderMembers(wrap, mi, 'right', match.rightTeam);
+    renderGroups(wrap, mi, match);
   });
 
   bindMatchListEvents();
   redrawAllCanvases();
 }
 
-function renderMembers(wrap, mi, side, team){
-  const block = wrap.querySelector(`.team-block[data-team="${side}"][data-mi="${mi}"] .members`);
+function renderGroups(wrap, mi, match){
+  if (!Array.isArray(match.groups)) {
+    match.groups=[{members:match.leftTeam||[]},{members:match.rightTeam||[]}];
+  }
+  const host=wrap.querySelector(`.groups[data-mi="${mi}"]`);
+  host.innerHTML=match.groups.map((group,gi)=>`
+    <div class="team-block" data-gi="${gi}" data-mi="${mi}">
+      <div class="team-label">対戦グループ${String.fromCharCode(65+gi)}</div>
+      ${(match.titleMode==='title')?`<label class="checkline"><input type="radio" name="champion-${mi}" data-mi="${mi}" data-gi="${gi}" data-champion ${match.championGroup===gi?'checked':''}><span>試合前王者</span></label>`:''}
+      <div class="members"></div>
+      <button class="add-member" type="button" data-mi="${mi}" data-gi="${gi}">＋ メンバー追加</button>
+      <button class="del-group del" type="button" data-mi="${mi}" data-gi="${gi}" ${match.groups.length<=2?'disabled':''}>このグループを削除</button>
+    </div>`).join('');
+  match.groups.forEach((group,gi)=>renderMembers(wrap,mi,gi,group.members));
+}
+
+function renderMembers(wrap, mi, gi, team){
+  const block = wrap.querySelector(`.team-block[data-gi="${gi}"][data-mi="${mi}"] .members`);
   block.innerHTML = team.map((mem, idx) => `
     <div class="member-row">
-      <select data-team="${side}" data-mi="${mi}" data-idx="${idx}" data-mfield="mark">${markOptions(mem.mark)}</select>
-      <input type="text" data-team="${side}" data-mi="${mi}" data-idx="${idx}" data-mfield="name" value="${escapeAttr(mem.name)}">
-      <button class="del member-del" data-team="${side}" data-mi="${mi}" data-idx="${idx}">×</button>
+      <select data-gi="${gi}" data-mi="${mi}" data-idx="${idx}" data-mfield="mark">${markOptions(mem.mark)}</select>
+      <input type="text" data-gi="${gi}" data-mi="${mi}" data-idx="${idx}" data-mfield="name" value="${escapeAttr(mem.name)}">
+      <button class="del member-del" type="button" data-gi="${gi}" data-mi="${mi}" data-idx="${idx}" aria-label="対戦グループ${String.fromCharCode(65+gi)}のメンバーを削除">×</button>
     </div>
   `).join('');
 }
@@ -732,6 +784,18 @@ function bindMatchListEvents(){
       } else {
         matches[mi][field] = el.value;
       }
+      if (field === 'titleMode') {
+        matches[mi].isTitle = el.value !== 'none';
+        if (el.value !== 'title') matches[mi].championGroup = -1;
+        renderMatchList();
+      } else redrawOne(mi);
+    });
+  });
+
+  listEl.querySelectorAll('[data-champion]').forEach(el => {
+    el.addEventListener('change',()=>{
+      const mi=+el.dataset.mi;
+      matches[mi].championGroup=+el.dataset.gi;
       redrawOne(mi);
     });
   });
@@ -739,28 +803,44 @@ function bindMatchListEvents(){
   listEl.querySelectorAll('select[data-mfield], input[data-mfield]').forEach(el => {
     const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
     el.addEventListener(evt, () => {
-      const mi = +el.dataset.mi, idx = +el.dataset.idx, side = el.dataset.team;
-      const teamKey = side === 'left' ? 'leftTeam' : 'rightTeam';
-      matches[mi][teamKey][idx][el.dataset.mfield] = el.value;
+      const mi = +el.dataset.mi, gi=+el.dataset.gi, idx = +el.dataset.idx;
+      matches[mi].groups[gi].members[idx][el.dataset.mfield] = el.value;
       redrawOne(mi);
     });
   });
 
   listEl.querySelectorAll('.member-del').forEach(el => {
     el.addEventListener('click', () => {
-      const mi = +el.dataset.mi, idx = +el.dataset.idx, side = el.dataset.team;
-      const teamKey = side === 'left' ? 'leftTeam' : 'rightTeam';
-      if (matches[mi][teamKey].length <= 1) return;
-      matches[mi][teamKey].splice(idx,1);
+      const mi = +el.dataset.mi, gi=+el.dataset.gi, idx = +el.dataset.idx;
+      if (matches[mi].groups[gi].members.length <= 1) return;
+      matches[mi].groups[gi].members.splice(idx,1);
       renderMatchList();
     });
   });
 
   listEl.querySelectorAll('.add-member').forEach(el => {
     el.addEventListener('click', () => {
-      const mi = +el.dataset.mi, side = el.dataset.team;
-      const teamKey = side === 'left' ? 'leftTeam' : 'rightTeam';
-      matches[mi][teamKey].push({name:'選手名', mark:''});
+      const mi = +el.dataset.mi, gi=+el.dataset.gi;
+      matches[mi].groups[gi].members.push({name:'選手名', mark:''});
+      renderMatchList();
+    });
+  });
+
+  listEl.querySelectorAll('.add-group').forEach(el => {
+    el.addEventListener('click',()=>{
+      const mi=+el.dataset.mi;
+      matches[mi].groups.push({members:[{name:'選手名',mark:''}]});
+      renderMatchList();
+    });
+  });
+
+  listEl.querySelectorAll('.del-group').forEach(el => {
+    el.addEventListener('click',()=>{
+      const mi=+el.dataset.mi, gi=+el.dataset.gi;
+      if(matches[mi].groups.length<=2)return;
+      matches[mi].groups.splice(gi,1);
+      if(matches[mi].championGroup===gi)matches[mi].championGroup=-1;
+      else if(matches[mi].championGroup>gi)matches[mi].championGroup--;
       renderMatchList();
     });
   });
@@ -776,6 +856,8 @@ function bindMatchListEvents(){
   listEl.querySelectorAll('.dl-single').forEach(el => {
     el.addEventListener('click', () => {
       const mi = +el.dataset.mi;
+      const problem=validateMatch(matches[mi]);
+      if(problem){alert(`画像を保存できません。\n${problem}`);return;}
       const canvas = listEl.querySelector(`canvas[data-mi="${mi}"]`);
       const link = document.createElement('a');
       link.download = `match_${String(matches[mi].no).padStart(2,'0')}.png`;
@@ -796,6 +878,17 @@ function redrawAllCanvases(){
     const mi = +canvas.dataset.mi;
     drawMatch(canvas, matches[mi], settings);
   });
+}
+
+function validateMatch(match){
+  const groups=match.groups||[];
+  if(groups.length<2)return '対戦グループは2つ以上必要です。';
+  if(groups.some(group=>!group.members?.some(member=>String(member.name||'').trim())))return '選手名が空の対戦グループがあります。';
+  const winners=groups.filter(group=>group.members.some(member=>member.mark==='○')).length;
+  if(winners===0)return '勝者の選手に○を設定してください。';
+  if(winners>1)return '○が複数の対戦グループにあります。勝者グループは1つにしてください。';
+  if((match.titleMode||'none')==='title'&&(match.championGroup<0||match.championGroup>=groups.length))return '通常タイトル戦では、試合前王者を指定してください。';
+  return '';
 }
 
 // ZIP専用の区切り画像。画面上のカード一覧には追加しない。
@@ -861,6 +954,11 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('zipStatus');
   if (matches.length === 0) {
     statusEl.textContent = '出力対象の試合がありません。先にテキストを解析してください。';
+    return;
+  }
+  const problems=matches.map((match,index)=>({index,problem:validateMatch(match)})).filter(x=>x.problem);
+  if(problems.length){
+    statusEl.textContent=problems.map(x=>`第${matches[x.index].no}試合：${x.problem}`).join('　');
     return;
   }
   try {
