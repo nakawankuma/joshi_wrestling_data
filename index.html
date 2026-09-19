@@ -3,16 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>女子プロレス選手一覧表　</title>
+    <title>女子プロレス選手一覧表</title>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" href="favicon.png">
     <style>
+        :root {
+            color-scheme: light;
+            --focus-ring: rgba(102, 126, 234, 0.38);
+            --text-color: #2d3436;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, "Yu Gothic UI", Meiryo, sans-serif;
             margin: 0;
             padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-color);
             min-height: 100vh;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible {
+            outline: 3px solid var(--focus-ring);
+            outline-offset: 3px;
         }
         
         .container {
@@ -85,7 +110,7 @@
             font-size: 10px;
             font-weight: normal;
             box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            transition: all 0.3s ease;
+            transition: background 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
             opacity: 0.7;
         }
         
@@ -105,7 +130,6 @@
             font-size: 12px;
             max-height: 200px;
             overflow-y: auto;
-            display: none;
         }
         
         .stats-summary {
@@ -125,6 +149,7 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             transform: translateY(0);
             transition: transform 0.3s ease;
+            min-width: 180px;
         }
         
         .stat-card:hover {
@@ -148,7 +173,7 @@
         }
         
         .controls {
-            display: none;
+            display: flex;
             gap: 15px;
             margin: 20px 0;
             align-items: center;
@@ -164,7 +189,7 @@
             cursor: pointer;
             font-weight: bold;
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         
         .back-btn:hover {
@@ -287,10 +312,7 @@
         tr:hover td:not(:first-child) {
             background: #e3f2fd;
         }
-        
-        
-        
-        
+
         .promotion-header {
             font-size: 11px;
             writing-mode: horizontal-tb;
@@ -323,33 +345,7 @@
             max-width: 60px;
         }
 
-        /* 携帯での絞り込み時の特別調整 */
-        @media (max-width: 768px) {
-            /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
-            .table-container.filtered .promotion-header:not(.hidden-column) {
-                min-width: 80px;
-                max-width: 120px;
-                font-size: 9px;
-            }
-
-            /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
-            .table-container.filtered td:not(:first-child):not(.hidden-column) {
-                min-width: 80px;
-                max-width: 120px;
-                font-size: 10px;
-            }
-            
-            .table-container.filtered th:first-child,
-            .table-container.filtered td:first-child {
-                width: 40px;
-                min-width: 40px;
-                max-width: 40px;
-                font-size: 9px;
-            }
-        }
-        
         .year-detail-view {
-            display: none;
             background: #f8f9fa;
             border-radius: 15px;
             padding: 25px;
@@ -430,14 +426,15 @@
             border: 2px solid #667eea;
             border-radius: 25px;
             font-size: 16px;
-            outline: none;
-            transition: all 0.3s ease;
+            min-width: 0;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
             background: white;
         }
         
         .search-input:focus {
             border-color: #ff6b6b;
             box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+            outline-color: rgba(255, 107, 107, 0.38);
         }
         
         .clear-btn {
@@ -449,7 +446,7 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 14px;
-            transition: all 0.3s ease;
+            transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
             box-shadow: 0 3px 10px rgba(0,0,0,0.2);
         }
         
@@ -470,7 +467,7 @@
         /* 非表示列のスタイル（hidden-column はJSで動的に付与されるクラス） */
         /* stylelint-disable-next-line no-unused-selectors -- hidden-column はJSで動的に付与 */
         .hidden-column {
-            display: none !important;
+            display: none;
         }
 
         /* レスポンシブデザイン対応 */
@@ -548,6 +545,26 @@
                 text-align: center;
                 margin: 0;
             }
+
+            .table-container.filtered .promotion-header:not(.hidden-column) {
+                min-width: 80px;
+                max-width: 120px;
+                font-size: 9px;
+            }
+
+            .table-container.filtered td:not(:first-child):not(.hidden-column) {
+                min-width: 80px;
+                max-width: 120px;
+                font-size: 10px;
+            }
+
+            .table-container.filtered th:first-child,
+            .table-container.filtered td:first-child {
+                width: 40px;
+                min-width: 40px;
+                max-width: 40px;
+                font-size: 9px;
+            }
             
             /* テーブル関連の携帯対応 */
             .table-container {
@@ -572,11 +589,16 @@
             }
             
             /* 携帯では固定位置を無効化 */
+            th,
+            th:first-child,
+            td:first-child {
+                position: static;
+                left: auto;
+                z-index: auto;
+            }
+
             th {
-                position: static !important;
-                top: auto !important;
-                left: auto !important;
-                z-index: auto !important;
+                top: auto;
             }
             
             th:first-child, td:first-child {
@@ -587,17 +609,6 @@
                 cursor: pointer;
                 user-select: none;
                 -webkit-touch-callout: none;
-                /* 携帯では固定位置を無効化 */
-                position: static !important;
-                left: auto !important;
-                z-index: auto !important;
-            }
-            
-            td:first-child {
-                /* 年度セルの固定位置も無効化 */
-                position: static !important;
-                left: auto !important;
-                z-index: auto !important;
             }
             
             .promotion-header {
@@ -683,6 +694,17 @@
                 text-orientation: mixed;
             }
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto;
+                transition-duration: 0.01ms;
+                animation-duration: 0.01ms;
+                animation-iteration-count: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -703,7 +725,7 @@
                     <div class="stat-label">総現役選手数</div>
                 </div>
                 <!-- 絞り込み中のみ表示するカード -->
-                <div class="stat-card stat-card-filtered" id="filteredCard" style="display:none;">
+                <div class="stat-card stat-card-filtered" id="filteredCard" hidden>
                     <div class="stat-number" id="filteredWrestlers">0</div>
                     <div class="stat-label" id="filteredWrestlersLabel">絞り込み後選手数</div>
                 </div>
@@ -711,15 +733,15 @@
             
             <!-- 選手名検索機能 -->
             <div class="search-container">
-                <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" aria-label="選手名検索" oninput="searchWrestlers()" onkeyup="searchWrestlers()">
-                <button onclick="clearSearch()" class="clear-btn">クリア</button>
+                <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" aria-label="選手名検索" oninput="searchWrestlers()">
+                <button type="button" onclick="clearSearch()" class="clear-btn">クリア</button>
             </div>
             
-            <div class="controls" id="controls">
+            <div class="controls" id="controls" hidden>
                 <!-- コントロールボタンがここに動的に追加されます -->
             </div>
             
-            <div class="year-detail-view" id="yearDetailView">
+            <div class="year-detail-view" id="yearDetailView" hidden>
                 <!-- 年別詳細ビューがここに表示されます -->
             </div>
             
@@ -766,11 +788,11 @@
             
             <!-- デバッグコントロール（一番下に小さく配置） -->
             <div class="debug-controls">
-                <button class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
+                <button type="button" class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
             </div>
             
             <!-- デバッグ情報表示エリア -->
-            <div class="debug-info" id="debugInfo">
+            <div class="debug-info" id="debugInfo" hidden>
                 <strong>デバッグログ:</strong><br>
                 読み込み開始...<br>
             </div>
@@ -803,6 +825,13 @@
          * @param {Object} params - 設定するパラメータ {key: value}
          */
         function updateURLParams(params) {
+            // file:// では History API によるURL更新がセキュリティ制約で拒否される。
+            // 画面内の検索・絞り込みは継続し、URL同期だけを省略する。
+            if (window.location.protocol === 'file:') {
+                debugLog('ローカルファイル表示のためURL更新を省略');
+                return;
+            }
+
             const url = new URL(window.location);
             Object.keys(params).forEach(key => {
                 if (params[key] === null || params[key] === undefined) {
@@ -829,6 +858,11 @@
          * 全てのURLパラメータをクリアする
          */
         function clearURLParams() {
+            if (window.location.protocol === 'file:') {
+                debugLog('ローカルファイル表示のためURLパラメータ消去を省略');
+                return;
+            }
+
             window.history.pushState({}, '', window.location.pathname);
             debugLog('URLパラメータクリア');
         }
@@ -884,7 +918,7 @@
         function toggleDebug() {
             debugVisible = !debugVisible;
             const debugInfo = document.getElementById('debugInfo');
-            debugInfo.style.display = debugVisible ? 'block' : 'none';
+            debugInfo.hidden = !debugVisible;
             debugLog(`デバッグ表示: ${debugVisible ? '表示' : '非表示'}`);
         }
 
@@ -2244,12 +2278,12 @@
         // 絞り込み後選手数を別カードに表示するヘルパー
         function updateFilteredCount(count) {
             document.getElementById('filteredWrestlers').textContent = count;
-            document.getElementById('filteredCard').style.display = 'block';
+            document.getElementById('filteredCard').hidden = false;
         }
 
         // 絞り込みカードを非表示にするヘルパー
         function hideFilteredCount() {
-            document.getElementById('filteredCard').style.display = 'none';
+            document.getElementById('filteredCard').hidden = true;
         }
 
         function filterByPromotion(promotionName, promotionIndex) {
@@ -2383,9 +2417,9 @@
             debugLog('コントロール表示');
             try {
                 const controls = document.getElementById('controls');
-                controls.style.display = 'flex';
+                controls.hidden = false;
                 
-                let html = '<button class="back-btn" onclick="resetFilter()">← 全体表示に戻る</button>';
+                let html = '<button type="button" class="back-btn" onclick="resetFilter()">← 全体表示に戻る</button>';
                 
                 if (currentFilter) {
                     if (currentFilter.type === 'promotion') {
@@ -2405,9 +2439,9 @@
         function showPromotionDetail(promotionName, data, promotionIndex) {
             debugLog(`団体詳細表示: ${promotionName}`);
             try {
-                document.getElementById('tableContainer').style.display = 'none';
+                document.getElementById('tableContainer').hidden = true;
                 const yearDetailView = document.getElementById('yearDetailView');
-                yearDetailView.style.display = 'block';
+                yearDetailView.hidden = false;
                 
                 let html = `
                     <div class="year-title">${promotionName} 所属選手一覧</div>
@@ -2446,9 +2480,9 @@
         function showYearDetailView(year, promotions) {
             debugLog(`年別詳細表示: ${year}`);
             try {
-                document.getElementById('tableContainer').style.display = 'none';
+                document.getElementById('tableContainer').hidden = true;
                 const yearDetailView = document.getElementById('yearDetailView');
-                yearDetailView.style.display = 'block';
+                yearDetailView.hidden = false;
 
                 // タイトル表示: 数値のみの場合は「yyyy年デビュー選手一覧」、それ以外はそのまま表示
                 const isNumericYear = /^\d{4}$/.test(String(year).trim());
@@ -2489,9 +2523,9 @@
                     updateURLParams({ search: searchParam });
                 }
 
-                document.getElementById('controls').style.display = 'none';
-                document.getElementById('yearDetailView').style.display = 'none';
-                document.getElementById('tableContainer').style.display = 'block';
+                document.getElementById('controls').hidden = true;
+                document.getElementById('yearDetailView').hidden = true;
+                document.getElementById('tableContainer').hidden = false;
 
                 // 検索中の場合は検索結果を再表示
                 if (isSearching) {
@@ -2594,9 +2628,9 @@
             if (isFiltered) {
                 currentFilter = null;
                 isFiltered = false;
-                document.getElementById('controls').style.display = 'none';
-                document.getElementById('yearDetailView').style.display = 'none';
-                document.getElementById('tableContainer').style.display = 'block';
+                document.getElementById('controls').hidden = true;
+                document.getElementById('yearDetailView').hidden = true;
+                document.getElementById('tableContainer').hidden = false;
             }
         }
 
