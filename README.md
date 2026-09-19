@@ -60,8 +60,19 @@ Excelの内容を `index.html` と `match_card_planner.html` の両方へ反映�
 .\run_converter.ps1
 ```
 
+`run_converter.ps1` はスクリプトのあるディレクトリへ自動的に移動し、
+UTF-8モードのPythonで変換を実行します。
+
 既定の設定は `converter_config.json` にあります。
 1回の変換で、選手一覧と試合カード組み立てツールの団体・選手データが同時に更新されます。
+団体名や年度の重複、年度なしの選手データ、同一団体内の選手名重複、
+生成対象の欠落を検出した場合はエラーで停止します。
+
+変換ロジックのテストは次のコマンドで実行できます。
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -m unittest -v test_xlsx_to_html_converter.py
+```
 
 ## 主なファイル
 

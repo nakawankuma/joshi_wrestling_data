@@ -754,26 +754,26 @@
                                 
                                 
                                 
-                                <th class="promotion-header" onclick="filterByPromotion('Stardom', 1)">Stardom</th>
-                                <th class="promotion-header" onclick="filterByPromotion('AWG', 2)">AWG</th>
-                                <th class="promotion-header" onclick="filterByPromotion('TJPW', 3)">TJPW</th>
-                                <th class="promotion-header" onclick="filterByPromotion('マリゴ', 4)">マリゴ</th>
-                                <th class="promotion-header" onclick="filterByPromotion('IR/ホットシュシュ/COR', 5)">IR/ホットシュシュ/COR</th>
-                                <th class="promotion-header" onclick="filterByPromotion('Diana', 6)">Diana</th>
-                                <th class="promotion-header" onclick="filterByPromotion('JTO', 7)">JTO</th>
-                                <th class="promotion-header" onclick="filterByPromotion('SENDAI', 8)">SENDAI</th>
-                                <th class="promotion-header" onclick="filterByPromotion('マーベラス', 9)">マーベラス</th>
-                                <th class="promotion-header" onclick="filterByPromotion('Pure-J', 10)">Pure-J</th>
-                                <th class="promotion-header" onclick="filterByPromotion('チョコプロ', 11)">チョコプロ</th>
-                                <th class="promotion-header" onclick="filterByPromotion('なにわ女子', 12)">なにわ女子</th>
-                                <th class="promotion-header" onclick="filterByPromotion('LLPW-X', 13)">LLPW-X</th>
-                                <th class="promotion-header" onclick="filterByPromotion('SEAdLINNNG', 14)">SEAdLINNNG</th>
-                                <th class="promotion-header" onclick="filterByPromotion('Wave', 15)">Wave</th>
-                                <th class="promotion-header" onclick="filterByPromotion('ガンプロ', 16)">ガンプロ</th>
-                                <th class="promotion-header" onclick="filterByPromotion('柳ヶ瀬', 17)">柳ヶ瀬</th>
-                                <th class="promotion-header" onclick="filterByPromotion('海外', 18)">海外</th>
-                                <th class="promotion-header" onclick="filterByPromotion('その他', 19)">その他</th>
-                                <th class="promotion-header" onclick="filterByPromotion('フリー', 20)">フリー</th>
+                                <th class="promotion-header" data-promotion-index="1" role="button" tabindex="0">Stardom</th>
+                                <th class="promotion-header" data-promotion-index="2" role="button" tabindex="0">AWG</th>
+                                <th class="promotion-header" data-promotion-index="3" role="button" tabindex="0">TJPW</th>
+                                <th class="promotion-header" data-promotion-index="4" role="button" tabindex="0">マリゴ</th>
+                                <th class="promotion-header" data-promotion-index="5" role="button" tabindex="0">IR/ホットシュシュ/COR</th>
+                                <th class="promotion-header" data-promotion-index="6" role="button" tabindex="0">Diana</th>
+                                <th class="promotion-header" data-promotion-index="7" role="button" tabindex="0">JTO</th>
+                                <th class="promotion-header" data-promotion-index="8" role="button" tabindex="0">SENDAI</th>
+                                <th class="promotion-header" data-promotion-index="9" role="button" tabindex="0">マーベラス</th>
+                                <th class="promotion-header" data-promotion-index="10" role="button" tabindex="0">Pure-J</th>
+                                <th class="promotion-header" data-promotion-index="11" role="button" tabindex="0">チョコプロ</th>
+                                <th class="promotion-header" data-promotion-index="12" role="button" tabindex="0">なにわ女子</th>
+                                <th class="promotion-header" data-promotion-index="13" role="button" tabindex="0">LLPW-X</th>
+                                <th class="promotion-header" data-promotion-index="14" role="button" tabindex="0">SEAdLINNNG</th>
+                                <th class="promotion-header" data-promotion-index="15" role="button" tabindex="0">Wave</th>
+                                <th class="promotion-header" data-promotion-index="16" role="button" tabindex="0">ガンプロ</th>
+                                <th class="promotion-header" data-promotion-index="17" role="button" tabindex="0">柳ヶ瀬</th>
+                                <th class="promotion-header" data-promotion-index="18" role="button" tabindex="0">海外</th>
+                                <th class="promotion-header" data-promotion-index="19" role="button" tabindex="0">その他</th>
+                                <th class="promotion-header" data-promotion-index="20" role="button" tabindex="0">フリー</th>
                             
                             
                             
@@ -924,7 +924,8 @@
 
         // データを直接定義（完全版）
         // 注: 年度欄は文字列として扱い、練習生などの特殊値にも対応
-        const wrestlerData = [
+        // GENERATED WRESTLER DATA START
+const wrestlerData = [
             [
                         "1977",
                         "",
@@ -2099,10 +2100,13 @@
                         ""
             ]
 ];
+// GENERATED WRESTLER DATA END
 
         debugLog(`データ読み込み完了: ${wrestlerData.length}行のデータ`);
 
-        const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシュシュ/COR", "Diana", "JTO", "SENDAI", "マーベラス", "Pure-J", "チョコプロ", "なにわ女子", "LLPW-X", "SEAdLINNNG", "Wave", "ガンプロ", "柳ヶ瀬", "海外", "その他", "フリー"];
+        // GENERATED PROMOTION NAMES START
+const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシュシュ/COR", "Diana", "JTO", "SENDAI", "マーベラス", "Pure-J", "チョコプロ", "なにわ女子", "LLPW-X", "SEAdLINNNG", "Wave", "ガンプロ", "柳ヶ瀬", "海外", "その他", "フリー"];
+// GENERATED PROMOTION NAMES END
 
         const wrestlerMeta = {};
 
@@ -2150,6 +2154,26 @@
                 debugLog(`団体別選手数計算エラー: ${error.message}`);
                 return promotionCounts;
             }
+        }
+
+        function initializePromotionHeaderControls() {
+            const headers = document.querySelectorAll('.promotion-header');
+            headers.forEach(header => {
+                const promotionIndex = Number(header.dataset.promotionIndex);
+                const promotionName = promotionNames[promotionIndex - 1];
+                if (!Number.isInteger(promotionIndex) || !promotionName) {
+                    throw new Error('団体ヘッダーの列番号が不正です');
+                }
+
+                const activate = () => filterByPromotion(promotionName, promotionIndex);
+                header.addEventListener('click', activate);
+                header.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        activate();
+                    }
+                });
+            });
         }
 
         function updatePromotionHeaders() {
@@ -2885,6 +2909,7 @@
         window.onload = function() {
             debugLog('window.onload開始');
             try {
+                initializePromotionHeaderControls();
                 renderTable(wrestlerData);
                 debugLog('テーブル描画完了');
                 calculateTotalWrestlers();

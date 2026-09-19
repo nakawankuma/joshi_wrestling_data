@@ -10,7 +10,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 
 Push-Location $projectDir
 try {
-    & $venvPython $converterScript
+    & $venvPython -X utf8 $converterScript
     if ($LASTEXITCODE -ne 0) {
         throw "変換処理に失敗しました（終了コード: $LASTEXITCODE）"
     }

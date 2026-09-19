@@ -17,6 +17,16 @@ import argparse
 import os
 import sys
 import html
+from collections import Counter
+from numbers import Real
+
+
+WRESTLER_DATA_START = "// GENERATED WRESTLER DATA START"
+WRESTLER_DATA_END = "// GENERATED WRESTLER DATA END"
+PROMOTION_NAMES_START = "// GENERATED PROMOTION NAMES START"
+PROMOTION_NAMES_END = "// GENERATED PROMOTION NAMES END"
+ROSTER_DATA_START = "// GENERATED ROSTER DATA START"
+ROSTER_DATA_END = "// GENERATED ROSTER DATA END"
 
 class XlsxToHtmlConverter:
     def __init__(self, config_file=None):
@@ -55,6 +65,69 @@ class XlsxToHtmlConverter:
         except Exception as e:
             raise Exception(f"設定ファイル読み込みエラー: {e}")
     
+    @staticmethod
+    def replace_generated_block(content, start_marker, end_marker, replacement, label):
+        """生成マーカー間を一意に特定して置換する"""
+        if content.count(start_marker) != 1 or content.count(end_marker) != 1:
+            raise Exception(f"{label}の生成マーカーが一意に見つかりません")
+
+        start = content.index(start_marker) + len(start_marker)
+        end = content.index(end_marker, start)
+        if start >= end:
+            raise Exception(f"{label}の生成マーカー順序が不正です")
+
+        return content[:start] + "\n" + replacement.rstrip() + "\n" + content[end:]
+
+    @staticmethod
+    def extract_generated_json(content, start_marker, end_marker, variable_name, label):
+        """生成マーカー間のconst代入からJSON値を取り出す"""
+        if content.count(start_marker) != 1 or content.count(end_marker) != 1:
+            raise Exception(f"{label}の生成マーカーが一意に見つかりません")
+
+        start = content.index(start_marker) + len(start_marker)
+        end = content.index(end_marker, start)
+        block = content[start:end].strip()
+        prefix = f"const {variable_name} = "
+        if not block.startswith(prefix) or not block.endswith(";"):
+            raise Exception(f"{label}のconst宣言形式が不正です")
+
+        try:
+            return json.loads(block[len(prefix):-1])
+        except json.JSONDecodeError as e:
+            raise Exception(f"{label}のJSON形式が不正です: {e}") from e
+
+    @staticmethod
+    def find_header_row(df):
+        """デビュー年ヘッダーを一意に特定する"""
+        matches = [
+            index
+            for index, row in df.iterrows()
+            if len(row) > 1
+            and pd.notna(row.iloc[1])
+            and str(row.iloc[1]).strip() == "デビュー年"
+        ]
+        if len(matches) != 1:
+            raise Exception(
+                f"デビュー年ヘッダーは1行必要です（検出数: {len(matches)}）"
+            )
+        return matches[0]
+
+    @staticmethod
+    def normalize_year(year, excel_row_number):
+        """年度欄を検証して文字列へ正規化する"""
+        if isinstance(year, Real) and not isinstance(year, bool):
+            numeric_year = float(year)
+            if not numeric_year.is_integer():
+                raise Exception(
+                    f"Excel {excel_row_number}行目の年度が整数ではありません: {year}"
+                )
+            return str(int(numeric_year))
+
+        year_text = str(year).strip()
+        if not year_text:
+            raise Exception(f"Excel {excel_row_number}行目の年度が空です")
+        return year_text
+
     def read_xlsx_data(self, xlsx_file=None):
         """XLSXファイルからデータを読み込み"""
         file_path = xlsx_file or self.config["xlsx_file"]
@@ -69,15 +142,7 @@ class XlsxToHtmlConverter:
     
     def extract_promotion_headers(self, df):
         """Excelファイルから団体名のヘッダーを抽出"""
-        header_row = None
-        for index, row in df.iterrows():
-            if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() == "デビュー年":
-                header_row = index
-                break
-        
-        if header_row is None:
-            print("ヘッダー行が見つかりません")
-            return []
+        header_row = self.find_header_row(df)
         
         # ヘッダー行から団体名を抽出（2列目以降）
         promotion_names = []
@@ -85,11 +150,27 @@ class XlsxToHtmlConverter:
         
         for col_idx in range(2, len(header_data)):
             cell_value = header_data.iloc[col_idx]
-            if pd.notna(cell_value):
-                promotion_name = str(cell_value).strip()
-                promotion_names.append(promotion_name)
-            else:
-                promotion_names.append("")
+            promotion_names.append(
+                str(cell_value).strip() if pd.notna(cell_value) else ""
+            )
+
+        blank_columns = [
+            index + 3 for index, name in enumerate(promotion_names) if not name
+        ]
+        if blank_columns:
+            raise Exception(
+                "団体名が空の列があります（Excel列番号: "
+                + ", ".join(map(str, blank_columns))
+                + "）"
+            )
+
+        duplicate_names = sorted(
+            name for name, count in Counter(promotion_names).items() if count > 1
+        )
+        if duplicate_names:
+            raise Exception(
+                "団体名が重複しています: " + ", ".join(duplicate_names)
+            )
         
         print(f"抽出された団体名: {promotion_names}")
         return promotion_names
@@ -104,16 +185,7 @@ class XlsxToHtmlConverter:
         """
         js_array = []
         
-        # ヘッダー行を見つける
-        header_row = None
-        for index, row in df.iterrows():
-            if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() == "デビュー年":
-                header_row = index
-                break
-        
-        if header_row is None:
-            print("ヘッダー行が見つかりません")
-            return f"const {self.config['js_variable_name']} = [];"
+        header_row = self.find_header_row(df)
         
         print(f"ヘッダー行: {header_row}")
         
@@ -126,12 +198,7 @@ class XlsxToHtmlConverter:
             if pd.isna(year):
                 continue
 
-            # 行データを作成（年度は文字列として扱う - 練習生などの特殊値にも対応）
-            # 数値の場合は文字列に変換、既に文字列の場合はそのまま使用
-            if isinstance(year, (int, float)):
-                year_str = str(int(year))
-            else:
-                year_str = str(year).strip()
+            year_str = self.normalize_year(year, index + 1)
 
             # 年度欄もHTMLエスケープ処理を実行
             year_escaped = html.escape(year_str, quote=True)
@@ -164,14 +231,7 @@ class XlsxToHtmlConverter:
 
     def convert_to_roster_data(self, df, promotion_names):
         """カード検討ツール用の団体別選手データを生成"""
-        header_row = None
-        for index, row in df.iterrows():
-            if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() == "デビュー年":
-                header_row = index
-                break
-
-        if header_row is None:
-            raise Exception("カード検討ツール用データのヘッダー行が見つかりません")
+        header_row = self.find_header_row(df)
 
         roster_data = {name: [] for name in promotion_names if name.strip()}
 
@@ -202,6 +262,56 @@ class XlsxToHtmlConverter:
 
         return roster_data
 
+    def validate_source_data(self, df, promotion_names, roster_data):
+        """変換前にExcelの構造と重複を検証する"""
+        header_row = self.find_header_row(df)
+        years = []
+
+        for index, row in df.iterrows():
+            if index <= header_row:
+                continue
+
+            promotion_cells = row.iloc[2:2 + len(promotion_names)]
+            has_wrestler_data = any(
+                pd.notna(value) and str(value).strip()
+                for value in promotion_cells
+            )
+            year = row.iloc[1]
+            if pd.isna(year):
+                if has_wrestler_data:
+                    raise Exception(
+                        f"Excel {index + 1}行目に年度なしの選手データがあります"
+                    )
+                continue
+
+            years.append(self.normalize_year(year, index + 1))
+
+        duplicate_years = sorted(
+            year for year, count in Counter(years).items() if count > 1
+        )
+        if duplicate_years:
+            raise Exception(
+                "年度ラベルが重複しています: " + ", ".join(duplicate_years)
+            )
+
+        if not years:
+            raise Exception("変換対象の選手データ行がありません")
+
+        duplicate_wrestlers = []
+        for promotion_name, wrestlers in roster_data.items():
+            duplicates = sorted(
+                name for name, count in Counter(wrestlers).items() if count > 1
+            )
+            duplicate_wrestlers.extend(
+                f"{promotion_name}: {name}" for name in duplicates
+            )
+
+        if duplicate_wrestlers:
+            raise Exception(
+                "同一団体内で選手名が重複しています: "
+                + ", ".join(duplicate_wrestlers)
+            )
+
     def update_match_card_planner(self, roster_data, planner_file=None):
         """カード検討ツール内の団体別選手データを更新"""
         file_path = planner_file or self.config["planner_html_file"]
@@ -212,25 +322,29 @@ class XlsxToHtmlConverter:
         with open(file_path, 'r', encoding=self.config["encoding"]) as f:
             content = f.read()
 
-        pattern = r'const\s+rosterData\s*=\s*\{[\s\S]*?\};'
-        if len(re.findall(pattern, content)) != 1:
-            raise Exception("カード検討ツールのrosterDataが一意に見つかりません")
-
         # 団体・選手単位でGit差分を確認できるよう、読みやすく整形して出力する
         roster_json = json.dumps(roster_data, ensure_ascii=False, indent=2)
         replacement = f"const rosterData = {roster_json};"
-        # 置換文字列内の \n やバックスラッシュをre.subに解釈させない
-        updated = re.sub(pattern, lambda _: replacement, content, count=1)
+        updated = self.replace_generated_block(
+            content,
+            ROSTER_DATA_START,
+            ROSTER_DATA_END,
+            replacement,
+            "カード検討ツールのrosterData",
+        )
+
+        parsed_roster = self.extract_generated_json(
+            updated,
+            ROSTER_DATA_START,
+            ROSTER_DATA_END,
+            "rosterData",
+            "カード検討ツールのrosterData",
+        )
+        if parsed_roster != roster_data:
+            raise Exception("カード検討ツールの選手データ生成に失敗しました")
 
         with open(file_path, 'w', encoding=self.config["encoding"]) as f:
             f.write(updated)
-
-        # 書き戻したJSONを再読込し、欠落や破損がないことを確認
-        with open(file_path, 'r', encoding=self.config["encoding"]) as f:
-            saved = f.read()
-        match = re.search(r'const\s+rosterData\s*=\s*(\{[\s\S]*?\});', saved)
-        if not match or json.loads(match.group(1)) != roster_data:
-            raise Exception("カード検討ツールの選手データ検証に失敗しました")
 
         wrestler_count = sum(len(wrestlers) for wrestlers in roster_data.values())
         print(f"カード検討ツール更新完了: {len(roster_data)}団体 / {wrestler_count}選手")
@@ -248,27 +362,56 @@ class XlsxToHtmlConverter:
             # ヘッダー行のパターンを検索
             header_pattern = r'(<tr>\s*<th class="sortable desc"[^>]*>デビュー年</th>\s*)(.*?)(\s*</tr>)'
             
-            match = re.search(header_pattern, html_content, re.DOTALL)
-            if not match:
-                print("警告: ヘッダー行が見つかりませんでした")
-                return html_content
+            header_matches = list(re.finditer(header_pattern, html_content, re.DOTALL))
+            if len(header_matches) != 1:
+                raise Exception(
+                    "テーブルヘッダーは1件必要です"
+                    f"（検出数: {len(header_matches)}）"
+                )
+            match = header_matches[0]
             
             # 新しいヘッダーを生成
             new_headers = []
             for i, promotion_name in enumerate(promotion_names):
-                if promotion_name.strip():
-                    header_html = f'<th class="promotion-header" onclick="filterByPromotion(\'{promotion_name}\', {i+1})">{promotion_name}</th>'
-                    new_headers.append(header_html)
+                escaped_name = html.escape(promotion_name, quote=True)
+                header_html = (
+                    '<th class="promotion-header" '
+                    f'data-promotion-index="{i + 1}" '
+                    'role="button" tabindex="0">'
+                    f'{escaped_name}</th>'
+                )
+                new_headers.append(header_html)
             
             # ヘッダー行を置換
             new_header_content = match.group(1) + '\n                                '.join(new_headers) + match.group(3)
-            html_content = re.sub(header_pattern, new_header_content, html_content, flags=re.DOTALL)
+            html_content = re.sub(
+                header_pattern,
+                lambda _: new_header_content,
+                html_content,
+                count=1,
+                flags=re.DOTALL,
+            )
             
             # JavaScript配列の団体名も更新
             promotion_names_js = json.dumps(promotion_names, ensure_ascii=False)
-            promotion_pattern = r'const promotionNames = \[.*?\];'
             new_promotion_js = f'const promotionNames = {promotion_names_js};'
-            html_content = re.sub(promotion_pattern, new_promotion_js, html_content, flags=re.DOTALL)
+            html_content = self.replace_generated_block(
+                html_content,
+                PROMOTION_NAMES_START,
+                PROMOTION_NAMES_END,
+                new_promotion_js,
+                "index.htmlのpromotionNames",
+            )
+
+            parsed_names = self.extract_generated_json(
+                html_content,
+                PROMOTION_NAMES_START,
+                PROMOTION_NAMES_END,
+                "promotionNames",
+                "index.htmlのpromotionNames",
+            )
+            if parsed_names != promotion_names:
+                raise Exception("団体名データの生成に失敗しました")
             
             # HTMLファイルに書き戻し
             with open(file_path, 'w', encoding=self.config["encoding"]) as f:
@@ -289,18 +432,30 @@ class XlsxToHtmlConverter:
             with open(file_path, 'r', encoding=self.config["encoding"]) as f:
                 html_content = f.read()
             
-            # 既存のデータ配列を検索して置換
-            pattern = r'const\s+' + re.escape(self.config["js_variable_name"]) + r'\s*=\s*\[[\s\S]*?\];'
+            html_content = self.replace_generated_block(
+                html_content,
+                WRESTLER_DATA_START,
+                WRESTLER_DATA_END,
+                js_array_string,
+                f"index.htmlの{self.config['js_variable_name']}",
+            )
             
-            if re.search(pattern, html_content):
-                # 既存の配列を置換
-                html_content = re.sub(pattern, js_array_string, html_content)
-                print(f"既存の{self.config['js_variable_name']}配列を更新しました")
-            else:
-                print(f"警告: {self.config['js_variable_name']}配列が見つかりませんでした")
-                print("生成されたJavaScriptコード:")
-                print(js_array_string)
-                return js_array_string
+            expected_json = json.loads(
+                js_array_string.split("=", 1)[1].strip().removesuffix(";")
+            )
+            parsed_json = self.extract_generated_json(
+                html_content,
+                WRESTLER_DATA_START,
+                WRESTLER_DATA_END,
+                self.config["js_variable_name"],
+                f"index.htmlの{self.config['js_variable_name']}",
+            )
+            if parsed_json != expected_json:
+                raise Exception(
+                    f"{self.config['js_variable_name']}データの生成に失敗しました"
+                )
+
+            print(f"既存の{self.config['js_variable_name']}配列を更新しました")
             
             # HTMLファイルに書き戻し
             with open(file_path, 'w', encoding=self.config["encoding"]) as f:
@@ -312,101 +467,80 @@ class XlsxToHtmlConverter:
         except Exception as e:
             raise Exception(f"HTMLファイル更新エラー: {e}")
     
-    def fix_newlines_in_html(self, file_path=None):
-        """HTMLファイル内の改行文字を\\nにエスケープ"""
-        target_file = file_path or self.config["html_file"]
-        
-        print("🔧 改行文字の修正を開始します...")
-        
-        with open(target_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # wrestlerData配列内の文字列を修正
-        def fix_string_newlines(match):
-            full_match = match.group(0)
-            # クォート内の改行文字を\\nに置換
-            fixed = full_match.replace('\n', '\\n').replace('\r', '\\r')
-            return fixed
-        
-        # 文字列パターンを検索（改行を含む可能性のある文字列）
-        pattern = r'"[^"]*(?:\n[^"]*)*"'
-        
-        # wrestlerData配列の部分を特定
-        start_marker = f'const {self.config["js_variable_name"]} = ['
-        end_marker = '];'
-        
-        start_idx = content.find(start_marker)
-        if start_idx == -1:
-            print(f"❌ {self.config['js_variable_name']}配列が見つかりません")
-            return False
-        
-        end_idx = content.find(end_marker, start_idx) + len(end_marker)
-        if end_idx == len(end_marker) - 1:
-            print(f"❌ {self.config['js_variable_name']}配列の終了が見つかりません")
-            return False
-        
-        # 配列部分を抽出
-        before_array = content[:start_idx]
-        array_part = content[start_idx:end_idx]
-        after_array = content[end_idx:]
-        
-        print(f"配列部分を抽出: {len(array_part)}文字")
-        
-        # 配列部分の改行文字を修正
-        fixed_array = re.sub(pattern, fix_string_newlines, array_part)
-        
-        # 修正されたコンテンツを作成
-        fixed_content = before_array + fixed_array + after_array
-        
-        # ファイルに書き戻し
-        with open(target_file, 'w', encoding='utf-8') as f:
-            f.write(fixed_content)
-        
-        print(f"✅ 改行文字の修正完了: {target_file}")
-        
-        # 修正数をカウント
-        original_newlines = array_part.count('\n"') + array_part.count('"\n')
-        fixed_newlines = fixed_array.count('\\n')
-        
-        print(f"修正された改行文字: {fixed_newlines}個")
-        
-        return True
-    
-    def verify_fix(self, file_path=None):
-        """修正結果を検証"""
-        target_file = file_path or self.config["html_file"]
-        
-        try:
-            with open(target_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # JavaScript配列部分をチェック
-            start_idx = content.find(f'const {self.config["js_variable_name"]} = [')
-            end_idx = content.find('];', start_idx) + 2
-            
-            if start_idx != -1 and end_idx > start_idx:
-                array_section = content[start_idx:end_idx]
-                
-                # 生の改行文字がまだ残っているかチェック
-                problem_lines = []
-                lines = array_section.split('\n')
-                for i, line in enumerate(lines):
-                    if '"' in line and line.count('"') % 2 == 1:  # 開始クォートのみ
-                        problem_lines.append(i)
-                
-                if problem_lines:
-                    print(f"❌ まだ問題のある行があります: {len(problem_lines)}行")
-                    return False
-                else:
-                    print("✅ 改行文字の問題は解決されました")
-                    return True
-            else:
-                print("❌ 配列が見つかりません")
-                return False
-                
-        except Exception as e:
-            print(f"❌ 検証エラー: {e}")
-            return False
+    def verify_outputs(
+        self,
+        html_file,
+        planner_file,
+        expected_js_array,
+        promotion_names,
+        roster_data,
+    ):
+        """生成した2つのHTMLをJSONとして再読込し、相互整合性を検証する"""
+        with open(html_file, 'r', encoding=self.config["encoding"]) as f:
+            html_content = f.read()
+        with open(planner_file, 'r', encoding=self.config["encoding"]) as f:
+            planner_content = f.read()
+
+        wrestler_data = self.extract_generated_json(
+            html_content,
+            WRESTLER_DATA_START,
+            WRESTLER_DATA_END,
+            self.config["js_variable_name"],
+            f"index.htmlの{self.config['js_variable_name']}",
+        )
+        saved_promotion_names = self.extract_generated_json(
+            html_content,
+            PROMOTION_NAMES_START,
+            PROMOTION_NAMES_END,
+            "promotionNames",
+            "index.htmlのpromotionNames",
+        )
+        saved_roster_data = self.extract_generated_json(
+            planner_content,
+            ROSTER_DATA_START,
+            ROSTER_DATA_END,
+            "rosterData",
+            "カード検討ツールのrosterData",
+        )
+        expected_wrestler_data = json.loads(
+            expected_js_array.split("=", 1)[1].strip().removesuffix(";")
+        )
+
+        if wrestler_data != expected_wrestler_data:
+            raise Exception("index.htmlの選手データがExcel変換結果と一致しません")
+        if saved_promotion_names != promotion_names:
+            raise Exception("index.htmlの団体名がExcel変換結果と一致しません")
+        if saved_roster_data != roster_data:
+            raise Exception("カード検討ツールの選手データがExcel変換結果と一致しません")
+
+        derived_roster = {
+            promotion_name: [
+                wrestler.strip()
+                for row in wrestler_data
+                for wrestler in str(row[index + 1] or "").splitlines()
+                if wrestler.strip()
+            ]
+            for index, promotion_name in enumerate(promotion_names)
+        }
+        if derived_roster != saved_roster_data:
+            raise Exception("2つのHTML間で団体別選手データが一致しません")
+
+        header_indexes = [
+            int(value)
+            for value in re.findall(
+                r'<th class="promotion-header" data-promotion-index="(\d+)"',
+                html_content,
+            )
+        ]
+        expected_indexes = list(range(1, len(promotion_names) + 1))
+        if header_indexes != expected_indexes:
+            raise Exception("団体ヘッダーの列番号がExcelの列順と一致しません")
+
+        print(
+            "生成結果検証完了: "
+            f"{len(promotion_names)}団体 / "
+            f"{sum(len(names) for names in roster_data.values())}選手"
+        )
     
     def convert(self, xlsx_file=None, html_file=None):
         """XLSXからHTMLへの完全変換ワークフローを実行"""
@@ -414,73 +548,93 @@ class XlsxToHtmlConverter:
             print("=== XLSX to HTML 完全変換ワークフロー開始 ===")
             print()
             
-            # ステップ1: XLSXデータを読み込み
-            print("📋 ステップ1: XLSXデータをHTMLに変換")
-            df = self.read_xlsx_data(xlsx_file)
-            
-            # 団体名ヘッダーを抽出
-            promotion_names = self.extract_promotion_headers(df)
-            
-            # JavaScript配列に変換
-            js_array = self.convert_to_js_array(df)
-
-            # カード検討ツール用データも同じExcelから生成
-            roster_data = self.convert_to_roster_data(df, promotion_names)
+            target_file = html_file or self.config["html_file"]
             planner_file = self.config["planner_html_file"]
-            if not os.path.exists(planner_file):
-                raise Exception(f"カード検討ツールが見つかりません: {planner_file}")
+            for label, file_path in (
+                ("一覧HTML", target_file),
+                ("カード検討ツール", planner_file),
+            ):
+                if not os.path.exists(file_path):
+                    raise Exception(f"{label}が見つかりません: {file_path}")
+
+            # 書き込み前に全置換対象が揃っていることを検証する
+            with open(target_file, 'r', encoding=self.config["encoding"]) as f:
+                html_template = f.read()
             with open(planner_file, 'r', encoding=self.config["encoding"]) as f:
-                planner_content = f.read()
-            planner_pattern = r'const\s+rosterData\s*=\s*\{[\s\S]*?\};'
-            if len(re.findall(planner_pattern, planner_content)) != 1:
-                raise Exception("カード検討ツールのrosterDataが一意に見つかりません")
+                planner_template = f.read()
+
+            self.extract_generated_json(
+                html_template,
+                WRESTLER_DATA_START,
+                WRESTLER_DATA_END,
+                self.config["js_variable_name"],
+                f"index.htmlの{self.config['js_variable_name']}",
+            )
+            self.extract_generated_json(
+                html_template,
+                PROMOTION_NAMES_START,
+                PROMOTION_NAMES_END,
+                "promotionNames",
+                "index.htmlのpromotionNames",
+            )
+            self.extract_generated_json(
+                planner_template,
+                ROSTER_DATA_START,
+                ROSTER_DATA_END,
+                "rosterData",
+                "カード検討ツールのrosterData",
+            )
+            header_pattern = (
+                r'(<tr>\s*<th class="sortable desc"[^>]*>'
+                r'デビュー年</th>\s*)(.*?)(\s*</tr>)'
+            )
+            if len(re.findall(header_pattern, html_template, re.DOTALL)) != 1:
+                raise Exception("一覧HTMLのテーブルヘッダーが一意に見つかりません")
+
+            # ステップ1: XLSXデータを読み込み
+            print("ステップ1: XLSXデータを検証・変換")
+            df = self.read_xlsx_data(xlsx_file)
+            promotion_names = self.extract_promotion_headers(df)
+            js_array = self.convert_to_js_array(df)
+            roster_data = self.convert_to_roster_data(df, promotion_names)
+            self.validate_source_data(df, promotion_names, roster_data)
             
             # HTMLファイルを更新
             self.update_html_file(js_array, html_file)
-            print("✅ データ変換完了")
+            print("データ変換完了")
             print()
             
             # ステップ1.5: HTMLヘッダーを更新
-            print("🏷️ ステップ1.5: HTMLヘッダーをExcelに合わせて更新")
+            print("ステップ2: HTMLヘッダーをExcelに合わせて更新")
             self.update_html_headers(promotion_names, html_file)
-            print("✅ ヘッダー更新完了")
+            print("ヘッダー更新完了")
             print()
             
-            # ステップ2: 改行文字を修正
-            print("🔧 ステップ2: 改行文字の修正")
-            if self.fix_newlines_in_html(html_file):
-                print("✅ 改行文字修正完了")
-            else:
-                print("❌ 改行文字修正失敗")
-                return False
+            # カード検討ツールも同じ選手データへ更新
+            print("ステップ3: カード検討ツールの選手データ更新")
+            self.update_match_card_planner(roster_data, planner_file)
+            print("カード検討ツール更新完了")
             print()
             
-            # ステップ3: 検証
-            print("🔍 ステップ3: 結果検証")
-            if self.verify_fix(html_file):
-                print("✅ 検証成功")
-            else:
-                print("❌ 検証失敗")
-                return False
+            print("ステップ4: 生成結果の完全比較")
+            self.verify_outputs(
+                target_file,
+                planner_file,
+                js_array,
+                promotion_names,
+                roster_data,
+            )
             print()
 
-            # ステップ4: カード検討ツールも同じ選手データへ更新
-            print("🃏 ステップ4: カード検討ツールの選手データ更新")
-            self.update_match_card_planner(roster_data, planner_file)
-            print("✅ カード検討ツール更新・検証完了")
+            print("完全変換ワークフロー完了")
             print()
-            
-            print("🎉 完全変換ワークフロー完了！")
-            print()
-            target_file = html_file or self.config["html_file"]
-            print(f"📁 出力ファイル: {target_file}")
-            print(f"📁 カード検討ツール: {planner_file}")
-            print("🔁 このスクリプトは完全に再現性があります")
+            print(f"出力ファイル: {target_file}")
+            print(f"カード検討ツール: {planner_file}")
             
             return True
             
         except Exception as e:
-            print(f"❌ 変換エラー: {e}")
+            print(f"変換エラー: {e}")
             return False
 
 def create_sample_config():
@@ -529,11 +683,11 @@ def main():
         success = converter.convert(args.xlsx, args.html)
         
         if not success:
-            print("💥 変換に失敗しました")
+            print("変換に失敗しました")
             sys.exit(1)
         
     except Exception as e:
-        print(f"💥 致命的エラー: {e}")
+        print(f"致命的エラー: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

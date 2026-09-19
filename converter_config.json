@@ -3,9 +3,6 @@
     "html_file": "index.html",
     "planner_html_file": "match_card_planner.html",
     "sheet_name": 0,
-    "data_start_row": 0,
-    "year_column": 0,
-    "data_columns_start": 1,
     "js_variable_name": "wrestlerData",
     "encoding": "utf-8"
 }
