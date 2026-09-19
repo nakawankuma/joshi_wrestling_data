@@ -1,2 +1,7 @@
 /.idea/
 /.claude/
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+~$*.xlsx

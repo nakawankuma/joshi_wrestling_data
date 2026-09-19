@@ -189,8 +189,15 @@ class XlsxToHtmlConverter:
 
                 cell_value = row.iloc[column_index]
                 if pd.notna(cell_value):
-                    roster_data[promotion_name].append(
-                        html.escape(str(cell_value).strip(), quote=True)
+                    # Excelの1セルに改行区切りで複数選手が入っていても、
+                    # rosterDataでは「1選手 = 1要素」に正規化する。
+                    wrestler_names = (
+                        name.strip() for name in str(cell_value).splitlines()
+                    )
+                    roster_data[promotion_name].extend(
+                        html.escape(name, quote=True)
+                        for name in wrestler_names
+                        if name
                     )
 
         return roster_data
@@ -209,7 +216,8 @@ class XlsxToHtmlConverter:
         if len(re.findall(pattern, content)) != 1:
             raise Exception("カード検討ツールのrosterDataが一意に見つかりません")
 
-        roster_json = json.dumps(roster_data, ensure_ascii=False, separators=(',', ':'))
+        # 団体・選手単位でGit差分を確認できるよう、読みやすく整形して出力する
+        roster_json = json.dumps(roster_data, ensure_ascii=False, indent=2)
         replacement = f"const rosterData = {roster_json};"
         # 置換文字列内の \n やバックスラッシュをre.subに解釈させない
         updated = re.sub(pattern, lambda _: replacement, content, count=1)
@@ -224,9 +232,7 @@ class XlsxToHtmlConverter:
         if not match or json.loads(match.group(1)) != roster_data:
             raise Exception("カード検討ツールの選手データ検証に失敗しました")
 
-        wrestler_count = sum(
-            len(cell.splitlines()) for cells in roster_data.values() for cell in cells
-        )
+        wrestler_count = sum(len(wrestlers) for wrestlers in roster_data.values())
         print(f"カード検討ツール更新完了: {len(roster_data)}団体 / {wrestler_count}選手")
         return True
     
