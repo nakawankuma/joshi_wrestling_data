@@ -13,9 +13,20 @@
             --text-color: #2d3436;
         }
 
-        *,
-        *::before,
-        *::after {
+        html,
+        body,
+        div,
+        nav,
+        a,
+        button,
+        input,
+        table,
+        thead,
+        tbody,
+        tr,
+        th,
+        td,
+        .sortable::after {
             box-sizing: border-box;
         }
 
@@ -696,13 +707,16 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            *,
-            *::before,
-            *::after {
-                scroll-behavior: auto;
-                transition-duration: 0.01ms;
-                animation-duration: 0.01ms;
-                animation-iteration-count: 1;
+            .tool-link,
+            .debug-toggle,
+            .stat-card,
+            .back-btn,
+            th,
+            td:first-child,
+            .promotion-header,
+            .search-input,
+            .clear-btn {
+                transition: none;
             }
         }
     </style>
