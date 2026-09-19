@@ -71,8 +71,11 @@ UTF-8モードのPythonで変換を実行します。
 変換ロジックのテストは次のコマンドで実行できます。
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -m unittest -v test_xlsx_to_html_converter.py
+.\run_tests.ps1
 ```
+
+`run_tests.ps1` はスクリプトのあるディレクトリへ自動的に移動し、
+仮想環境のPythonをUTF-8モードで起動して `test_*.py` をすべて実行します。
 
 ## 主なファイル
 
@@ -82,6 +85,7 @@ UTF-8モードのPythonで変換を実行します。
 - `woman-excel.xlsx`：選手データ
 - `xlsx_to_html_converter_all_in_one.py`：Excelデータ反映スクリプト
 - `converter_config.json`：変換設定
+- `run_tests.ps1`：Pythonテスト実行スクリプト
 
 ## ライセンス
 
