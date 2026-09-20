@@ -818,7 +818,9 @@
         function debugLog(message) {
             const debugInfo = document.getElementById('debugInfo');
             const currentTime = new Date().toLocaleTimeString();
-            debugInfo.innerHTML += `${currentTime}: ${message}<br>`;
+            const logLine = document.createElement('div');
+            logLine.textContent = `${currentTime}: ${message}`;
+            debugInfo.appendChild(logLine);
             debugInfo.scrollTop = debugInfo.scrollHeight;
             console.log(message);
         }
@@ -838,7 +840,7 @@
          * URLクエリパラメータを更新する
          * @param {Object} params - 設定するパラメータ {key: value}
          */
-        function updateURLParams(params) {
+        function updateURLParams(params, options = {}) {
             // file:// では History API によるURL更新がセキュリティ制約で拒否される。
             // 画面内の検索・絞り込みは継続し、URL同期だけを省略する。
             if (window.location.protocol === 'file:') {
@@ -854,7 +856,8 @@
                     url.searchParams.set(key, params[key]);
                 }
             });
-            window.history.pushState({}, '', url);
+            const historyMethod = options.replace ? 'replaceState' : 'pushState';
+            window.history[historyMethod]({}, '', url);
             debugLog(`URL更新: ${url.search}`);
         }
 
@@ -889,13 +892,29 @@
             try {
                 const filterType = getURLParam('filter');
                 const searchParam = getURLParam('search');
+                const searchInput = document.getElementById('wrestlerSearch');
+
+                // URLを正として、現在の表示状態をいったん初期化する。
+                currentFilter = null;
+                isFiltered = false;
+                isSearching = false;
+                originalData = null;
+                searchInput.value = searchParam || '';
+                document.getElementById('controls').hidden = true;
+                document.getElementById('yearDetailView').hidden = true;
+                document.getElementById('tableContainer').hidden = false;
+                showAllColumns();
+                resetColumnWidths();
 
                 // 検索パラメータの復元
                 if (searchParam) {
-                    const searchInput = document.getElementById('wrestlerSearch');
-                    searchInput.value = searchParam;
-                    searchWrestlers();
+                    searchWrestlers({updateUrl: false});
                     debugLog(`検索復元: ${searchParam}`);
+                } else {
+                    renderTable(wrestlerData);
+                    updatePromotionHeaders();
+                    calculateTotalWrestlers();
+                    hideFilteredCount();
                 }
 
                 // フィルターパラメータの復元
@@ -905,7 +924,11 @@
                         // 団体名からインデックスを取得
                         const promotionIndex = promotionNames.indexOf(promotionName);
                         if (promotionIndex !== -1) {
-                            filterByPromotion(promotionName, promotionIndex + 1);
+                            filterByPromotion(
+                                promotionName,
+                                promotionIndex + 1,
+                                {updateUrl: false}
+                            );
                             debugLog(`団体フィルター復元: ${promotionName}`);
                         }
                     }
@@ -915,7 +938,7 @@
                         // 文字列として比較
                         const yearRow = wrestlerData.find(row => String(row[0]) === year);
                         if (yearRow) {
-                            showYearDetail(year, yearRow);
+                            showYearDetail(year, yearRow, {updateUrl: false});
                             debugLog(`年度フィルター復元: ${year}`);
                         }
                     }
@@ -927,6 +950,8 @@
                 console.error(error);
             }
         }
+
+        window.addEventListener('popstate', restoreFromURL);
 
         // デバッグ表示切り替え関数
         function toggleDebug() {
@@ -2285,8 +2310,11 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                     sortTh.className = 'sortable ' + sortOrder;
                 }
                 debugLog(`ソート順変更: ${sortOrder}`);
-                
-                renderTable(wrestlerData);
+
+                const dataToRender = isSearching
+                    ? getCurrentFilteredData(true)
+                    : wrestlerData;
+                renderTable(dataToRender);
             } catch (error) {
                 debugLog(`ソート切り替えエラー: ${error.message}`);
                 console.error(error);
@@ -2324,7 +2352,7 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
             document.getElementById('filteredCard').hidden = true;
         }
 
-        function filterByPromotion(promotionName, promotionIndex) {
+        function filterByPromotion(promotionName, promotionIndex, options = {}) {
             debugLog(`団体フィルター開始: ${promotionName} (インデックス: ${promotionIndex})`);
             try {
                 // 検索中の場合は検索結果から、そうでなければ全データからフィルター
@@ -2356,10 +2384,13 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 updateFilteredCount(promotionCount);
 
                 // URLパラメータを更新
-                updateURLParams({
-                    filter: 'promotion',
-                    promotion: promotionName
-                });
+                if (options.updateUrl !== false) {
+                    updateURLParams({
+                        filter: 'promotion',
+                        promotion: promotionName,
+                        year: null
+                    });
+                }
 
                 showControls();
                 showPromotionDetail(promotionName, filteredResults, promotionIndex);
@@ -2370,7 +2401,11 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
         }
 
         // 現在の検索結果データを取得する関数
-        function getCurrentFilteredData() {
+        function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function getCurrentFilteredData(highlightMatches = false) {
             if (!isSearching) {
                 return wrestlerData;
             }
@@ -2381,6 +2416,10 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
             if (searchTerm === '') {
                 return wrestlerData;
             }
+
+            const searchPattern = highlightMatches
+                ? new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi')
+                : null;
             
             // 検索結果を再計算
             return wrestlerData.map(row => {
@@ -2397,8 +2436,13 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                             .filter(name => name.toLowerCase().includes(searchTerm));
 
                         if (wrestlerList.length > 0) {
-                            // マッチした選手名をハイライトなしで返す（団体フィルター用）
-                            newRow.push(wrestlerList.join('\n'));
+                            const displayNames = searchPattern
+                                ? wrestlerList.map(name => name.replace(
+                                    searchPattern,
+                                    '<span class="highlight">$1</span>'
+                                ))
+                                : wrestlerList;
+                            newRow.push(displayNames.join('\n'));
                         } else {
                             newRow.push('');
                         }
@@ -2413,7 +2457,7 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
             }).filter(row => row !== null);
         }
 
-        function showYearDetail(year, yearRow) {
+        function showYearDetail(year, yearRow, options = {}) {
             debugLog(`年詳細表示開始: ${year}`);
             try {
                 const promotions = [];
@@ -2438,10 +2482,13 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 updateFilteredCount(yearCount);
 
                 // URLパラメータを更新
-                updateURLParams({
-                    filter: 'year',
-                    year: year
-                });
+                if (options.updateUrl !== false) {
+                    updateURLParams({
+                        filter: 'year',
+                        promotion: null,
+                        year: year
+                    });
+                }
 
                 showControls();
                 showYearDetailView(year, promotions);
@@ -2456,18 +2503,28 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
             try {
                 const controls = document.getElementById('controls');
                 controls.hidden = false;
-                
-                let html = '<button type="button" class="back-btn" onclick="resetFilter()">← 全体表示に戻る</button>';
-                
+                controls.replaceChildren();
+
+                const backButton = document.createElement('button');
+                backButton.type = 'button';
+                backButton.className = 'back-btn';
+                backButton.textContent = '← 戻る';
+                backButton.addEventListener('click', resetFilter);
+                controls.appendChild(backButton);
+
                 if (currentFilter) {
+                    const filterInfo = document.createElement('div');
+                    filterInfo.className = 'filter-info';
                     if (currentFilter.type === 'promotion') {
-                        html += `<div class="filter-info">フィルター: ${currentFilter.value}</div>`;
+                        filterInfo.textContent = `フィルター: ${currentFilter.value}`;
                     } else if (currentFilter.type === 'year') {
-                        html += `<div class="filter-info">フィルター: ${currentFilter.value}年</div>`;
+                        filterInfo.textContent = `フィルター: ${currentFilter.value}年`;
+                    }
+                    if (filterInfo.textContent) {
+                        controls.appendChild(filterInfo);
                     }
                 }
-                
-                controls.innerHTML = html;
+
                 debugLog('コントロール表示完了');
             } catch (error) {
                 debugLog(`コントロール表示エラー: ${error.message}`);
@@ -2480,12 +2537,16 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 document.getElementById('tableContainer').hidden = true;
                 const yearDetailView = document.getElementById('yearDetailView');
                 yearDetailView.hidden = false;
-                
-                let html = `
-                    <div class="year-title">${promotionName} 所属選手一覧</div>
-                    <div class="promotion-grid">
-                `;
-                
+                yearDetailView.replaceChildren();
+
+                const title = document.createElement('div');
+                title.className = 'year-title';
+                title.textContent = `${promotionName} 所属選手一覧`;
+                yearDetailView.appendChild(title);
+
+                const grid = document.createElement('div');
+                grid.className = 'promotion-grid';
+
                 data.forEach(row => {
                     const year = row[0];
                     const wrestlers = row[promotionIndex];
@@ -2498,17 +2559,22 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                         const isNumericYear = /^\d{4}$/.test(String(year).trim());
                         const yearLabel = isNumericYear ? `${year}年デビュー` : year;
 
-                        html += `
-                            <div class="promotion-card">
-                                <div class="promotion-name-card">${yearLabel}</div>
-                                <div class="wrestler-names-card">${wrestlerList.map(wrestlerNameWithTwitter).join('<br>')}</div>
-                            </div>
-                        `;
+                        const card = document.createElement('div');
+                        card.className = 'promotion-card';
+                        const yearName = document.createElement('div');
+                        yearName.className = 'promotion-name-card';
+                        yearName.textContent = yearLabel;
+                        const wrestlerNames = document.createElement('div');
+                        wrestlerNames.className = 'wrestler-names-card';
+                        wrestlerNames.innerHTML = wrestlerList
+                            .map(wrestlerNameWithTwitter)
+                            .join('<br>');
+                        card.append(yearName, wrestlerNames);
+                        grid.appendChild(card);
                     }
                 });
-                
-                html += '</div>';
-                yearDetailView.innerHTML = html;
+
+                yearDetailView.appendChild(grid);
                 debugLog('団体詳細表示完了');
             } catch (error) {
                 debugLog(`団体詳細表示エラー: ${error.message}`);
@@ -2525,23 +2591,32 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 // タイトル表示: 数値のみの場合は「yyyy年デビュー選手一覧」、それ以外はそのまま表示
                 const isNumericYear = /^\d{4}$/.test(String(year).trim());
                 const title = isNumericYear ? `${year}年デビュー選手一覧` : `${year}選手一覧`;
+                yearDetailView.replaceChildren();
 
-                let html = `
-                    <div class="year-title">${title}</div>
-                    <div class="promotion-grid">
-                `;
-                
+                const titleElement = document.createElement('div');
+                titleElement.className = 'year-title';
+                titleElement.textContent = title;
+                yearDetailView.appendChild(titleElement);
+
+                const grid = document.createElement('div');
+                grid.className = 'promotion-grid';
+
                 promotions.forEach(promotion => {
-                    html += `
-                        <div class="promotion-card">
-                            <div class="promotion-name-card">${promotion.name}</div>
-                            <div class="wrestler-names-card">${promotion.wrestlers.map(wrestlerNameWithTwitter).join('<br>')}</div>
-                        </div>
-                    `;
+                    const card = document.createElement('div');
+                    card.className = 'promotion-card';
+                    const promotionName = document.createElement('div');
+                    promotionName.className = 'promotion-name-card';
+                    promotionName.textContent = promotion.name;
+                    const wrestlerNames = document.createElement('div');
+                    wrestlerNames.className = 'wrestler-names-card';
+                    wrestlerNames.innerHTML = promotion.wrestlers
+                        .map(wrestlerNameWithTwitter)
+                        .join('<br>');
+                    card.append(promotionName, wrestlerNames);
+                    grid.appendChild(card);
                 });
-                
-                html += '</div>';
-                yearDetailView.innerHTML = html;
+
+                yearDetailView.appendChild(grid);
                 debugLog('年別詳細表示完了');
             } catch (error) {
                 debugLog(`年別詳細表示エラー: ${error.message}`);
@@ -2554,12 +2629,12 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 currentFilter = null;
                 isFiltered = false;
 
-                // URLパラメータをクリア（検索パラメータは保持）
-                const searchParam = getURLParam('search');
-                clearURLParams();
-                if (searchParam) {
-                    updateURLParams({ search: searchParam });
-                }
+                // 検索パラメータを保持したまま、フィルター関連だけを削除する。
+                updateURLParams({
+                    filter: null,
+                    promotion: null,
+                    year: null
+                }, {replace: true});
 
                 document.getElementById('controls').hidden = true;
                 document.getElementById('yearDetailView').hidden = true;
@@ -2574,8 +2649,8 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                     calculateTotalWrestlers();
                     showAllColumns(); // 全ての列を表示
                     resetColumnWidths(); // 列幅をリセット
+                    hideFilteredCount(); // 絞り込みカードを非表示
                 }
-                hideFilteredCount(); // 絞り込みカードを非表示
                 debugLog('フィルターリセット完了');
             } catch (error) {
                 debugLog(`フィルターリセットエラー: ${error.message}`);
@@ -2583,9 +2658,10 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
         }
 
         // 選手名検索機能
-        function searchWrestlers() {
+        function searchWrestlers(options = {}) {
             const searchInput = document.getElementById('wrestlerSearch');
             const searchTerm = searchInput.value.trim().toLowerCase();
+            const updateUrl = options.updateUrl !== false;
             
             debugLog(`選手検索開始: "${searchTerm}"`);
             
@@ -2595,7 +2671,9 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 originalData = null;
 
                 // URLから検索パラメータを削除
-                updateURLParams({ search: null });
+                if (updateUrl) {
+                    updateURLParams({ search: null }, {replace: true});
+                }
 
                 resetFilter();
                 renderTable(wrestlerData);
@@ -2616,46 +2694,15 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 isSearching = true;
             }
             
-            // 検索結果をフィルタリング
-            const filteredData = wrestlerData.map(row => {
-                const year = row[0];
-                const newRow = [year];
-                
-                // 各団体のセルをチェック
-                for (let i = 1; i < row.length; i++) {
-                    const wrestlers = row[i];
-                    if (wrestlers && wrestlers.trim()) {
-                        // 選手名を分割して検索
-                        const wrestlerList = wrestlers.split('\n')
-                            .filter(name => name.trim())
-                            .filter(name => name.toLowerCase().includes(searchTerm));
-                        
-                        if (wrestlerList.length > 0) {
-                            // マッチした選手名をハイライト
-                            const highlightedWrestlers = wrestlerList.map(name => 
-                                name.replace(
-                                    new RegExp(`(${searchTerm})`, 'gi'),
-                                    '<span class="highlight">$1</span>'
-                                )
-                            );
-                            newRow.push(highlightedWrestlers.join('\n'));
-                        } else {
-                            newRow.push('');
-                        }
-                    } else {
-                        newRow.push('');
-                    }
-                }
-                
-                // 何らかの結果がある行のみ返す
-                const hasResults = newRow.slice(1).some(cell => cell && cell.trim());
-                return hasResults ? newRow : null;
-            }).filter(row => row !== null);
+            // 検索結果をフィルタリングし、一致部分を表示用に強調する。
+            const filteredData = getCurrentFilteredData(true);
             
             debugLog(`検索結果: ${filteredData.length}行がマッチ`);
 
             // URLパラメータを更新
-            updateURLParams({ search: searchTerm });
+            if (updateUrl) {
+                updateURLParams({ search: searchTerm }, {replace: true});
+            }
 
             // 検索結果を表示
             renderTable(filteredData);
@@ -2899,7 +2946,7 @@ const promotionNames = ["Stardom", "AWG", "TJPW", "マリゴ", "IR/ホットシ�
                 originalData = null;
 
                 // URLから検索パラメータを削除
-                updateURLParams({ search: null });
+                updateURLParams({ search: null }, {replace: true});
 
                 resetFilter();
                 renderTable(wrestlerData);

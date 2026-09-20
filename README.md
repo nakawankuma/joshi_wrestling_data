@@ -10,6 +10,16 @@
 `index.html` は、現役選手をデビュー年・団体別に確認できる一覧ページです。
 団体での絞り込みや選手名検索ができます。
 
+URL履歴を含む画面機能を確認するときは、ローカルWebサーバーを起動します。
+
+```powershell
+.\start_web.ps1
+```
+
+起動後、ブラウザーで `http://localhost:8000/index.html` を開きます。
+終了するときは、サーバーを実行しているPowerShellで `Ctrl+C` を押します。
+ポートを変更する場合は、例えば `.\start_web.ps1 -Port 8080` と実行します。
+
 ## 試合カード組み立てツール
 
 [試合カード組み立てツールを開く](./match_card_planner.html)
@@ -75,7 +85,8 @@ UTF-8モードのPythonで変換を実行します。
 ```
 
 `run_tests.ps1` はスクリプトのあるディレクトリへ自動的に移動し、
-仮想環境のPythonをUTF-8モードで起動して `test_*.py` をすべて実行します。
+仮想環境のPythonをUTF-8モードで起動して `test_*.py` を実行した後、
+Node.js標準のテストランナーで `test_index_ui.mjs` の画面ロジックテストを実行します。
 
 ## 主なファイル
 
@@ -85,7 +96,9 @@ UTF-8モードのPythonで変換を実行します。
 - `woman-excel.xlsx`：選手データ
 - `xlsx_to_html_converter_all_in_one.py`：Excelデータ反映スクリプト
 - `converter_config.json`：変換設定
+- `start_web.ps1`：ローカルWebサーバー起動スクリプト
 - `run_tests.ps1`：Pythonテスト実行スクリプト
+- `test_index_ui.mjs`：一覧画面の状態遷移・入力処理テスト
 
 ## ライセンス
 
