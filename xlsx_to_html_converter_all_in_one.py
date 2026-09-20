@@ -113,6 +113,11 @@ class XlsxToHtmlConverter:
         return matches[0]
 
     @staticmethod
+    def normalize_parentheses(value):
+        """全角の丸括弧を半角へ統一する"""
+        return str(value).replace("（", "(").replace("）", ")")
+
+    @staticmethod
     def normalize_year(year, excel_row_number):
         """年度欄を検証して文字列へ正規化する"""
         if isinstance(year, Real) and not isinstance(year, bool):
@@ -123,7 +128,7 @@ class XlsxToHtmlConverter:
                 )
             return str(int(numeric_year))
 
-        year_text = str(year).strip()
+        year_text = XlsxToHtmlConverter.normalize_parentheses(year).strip()
         if not year_text:
             raise Exception(f"Excel {excel_row_number}行目の年度が空です")
         return year_text
@@ -151,7 +156,9 @@ class XlsxToHtmlConverter:
         for col_idx in range(2, len(header_data)):
             cell_value = header_data.iloc[col_idx]
             promotion_names.append(
-                str(cell_value).strip() if pd.notna(cell_value) else ""
+                self.normalize_parentheses(cell_value).strip()
+                if pd.notna(cell_value)
+                else ""
             )
 
         blank_columns = [
@@ -213,7 +220,7 @@ class XlsxToHtmlConverter:
                 else:
                     # セルの値を文字列に変換し、HTMLエスケープ処理を実行
                     # <, >, &, ", ' などの特殊文字を &lt;, &gt;, &amp;, &quot;, &#x27; に変換
-                    cell_str = str(cell_value).strip()
+                    cell_str = self.normalize_parentheses(cell_value).strip()
                     escaped_str = html.escape(cell_str, quote=True)
                     row_data.append(escaped_str)
             
@@ -252,7 +259,8 @@ class XlsxToHtmlConverter:
                     # Excelの1セルに改行区切りで複数選手が入っていても、
                     # rosterDataでは「1選手 = 1要素」に正規化する。
                     wrestler_names = (
-                        name.strip() for name in str(cell_value).splitlines()
+                        self.normalize_parentheses(name).strip()
+                        for name in str(cell_value).splitlines()
                     )
                     roster_data[promotion_name].extend(
                         html.escape(name, quote=True)

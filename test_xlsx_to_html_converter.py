@@ -141,6 +141,28 @@ class XlsxToHtmlConverterTest(unittest.TestCase):
         )
         self.assertEqual(parsed, ["O'Reilly <Test>"])
 
+    def test_full_width_parentheses_are_normalized_in_generated_data(self):
+        source = self.make_dataframe([
+            [None, "デビュー年", "団体（仮）"],
+            [None, "練習生（予定）", "選手A（休）\n選手B（予定）"],
+        ])
+
+        promotion_names = self.converter.extract_promotion_headers(source)
+        wrestler_data = self.converter.convert_to_js_array(source)
+        roster_data = self.converter.convert_to_roster_data(
+            source,
+            promotion_names,
+        )
+
+        self.assertEqual(promotion_names, ["団体(仮)"])
+        self.assertIn('練習生(予定)', wrestler_data)
+        self.assertIn('選手A(休)\\n選手B(予定)', wrestler_data)
+        self.assertEqual(
+            roster_data,
+            {"団体(仮)": ["選手A(休)", "選手B(予定)"]},
+        )
+        self.assertNotRegex(wrestler_data, "[（）]")
+
 
 if __name__ == "__main__":
     unittest.main()

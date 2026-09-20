@@ -268,3 +268,9 @@ test('非表示のフィルター操作欄はCSSで表示されない', () => {
   assert.match(html, /\.controls:not\(\[hidden\]\)\s*\{/);
   assert.doesNotMatch(html, /\.controls\s*\{[^}]*display\s*:\s*flex/si);
 });
+
+test('デビュー年の並べ替え方向を上下別々の矢印で表示する', () => {
+  assert.match(html, /\.sortable\.asc::after\s*\{[^}]*content:\s*' ↑'/s);
+  assert.match(html, /\.sortable\.desc::after\s*\{[^}]*content:\s*' ↓'/s);
+  assert.doesNotMatch(html, /content:\s*' ↕'/);
+});
