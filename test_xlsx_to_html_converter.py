@@ -1,10 +1,14 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 from xlsx_to_html_converter_all_in_one import (
+    COMPLETION_ICON,
     PROMOTION_NAMES_END,
     PROMOTION_NAMES_START,
     XlsxToHtmlConverter,
@@ -162,6 +166,81 @@ class XlsxToHtmlConverterTest(unittest.TestCase):
             {"団体(仮)": ["選手A(休)", "選手B(予定)"]},
         )
         self.assertNotRegex(wrestler_data, "[（）]")
+
+    def test_completion_icon_is_printed_only_after_full_verification(self):
+        self.converter.config.update({
+            "html_file": "index.html",
+            "planner_html_file": "match_card_planner.html",
+        })
+        output = StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            html_file = Path(temp_dir) / "index.html"
+            planner_file = Path(temp_dir) / "match_card_planner.html"
+            html_file.write_text(
+                '<tr><th class="sortable desc">デビュー年</th></tr>',
+                encoding="utf-8",
+            )
+            planner_file.write_text("placeholder", encoding="utf-8")
+            self.converter.config["html_file"] = str(html_file)
+            self.converter.config["planner_html_file"] = str(planner_file)
+
+            with (
+                patch.object(self.converter, "extract_generated_json"),
+                patch.object(self.converter, "read_xlsx_data", return_value=object()),
+                patch.object(self.converter, "extract_promotion_headers", return_value=["A"]),
+                patch.object(self.converter, "convert_to_js_array", return_value="const wrestlerData = [];"),
+                patch.object(self.converter, "convert_to_roster_data", return_value={"A": []}),
+                patch.object(self.converter, "validate_source_data"),
+                patch.object(self.converter, "update_html_file"),
+                patch.object(self.converter, "update_html_headers"),
+                patch.object(self.converter, "update_match_card_planner"),
+                patch.object(self.converter, "verify_outputs") as verify_outputs,
+                redirect_stdout(output),
+            ):
+                self.assertTrue(self.converter.convert())
+
+        verify_outputs.assert_called_once()
+        self.assertIn(f"{COMPLETION_ICON} 完全変換ワークフロー完了", output.getvalue())
+
+    def test_completion_icon_is_not_printed_when_verification_fails(self):
+        self.converter.config.update({
+            "html_file": "index.html",
+            "planner_html_file": "match_card_planner.html",
+        })
+        output = StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            html_file = Path(temp_dir) / "index.html"
+            planner_file = Path(temp_dir) / "match_card_planner.html"
+            html_file.write_text(
+                '<tr><th class="sortable desc">デビュー年</th></tr>',
+                encoding="utf-8",
+            )
+            planner_file.write_text("placeholder", encoding="utf-8")
+            self.converter.config["html_file"] = str(html_file)
+            self.converter.config["planner_html_file"] = str(planner_file)
+
+            with (
+                patch.object(self.converter, "extract_generated_json"),
+                patch.object(self.converter, "read_xlsx_data", return_value=object()),
+                patch.object(self.converter, "extract_promotion_headers", return_value=["A"]),
+                patch.object(self.converter, "convert_to_js_array", return_value="const wrestlerData = [];"),
+                patch.object(self.converter, "convert_to_roster_data", return_value={"A": []}),
+                patch.object(self.converter, "validate_source_data"),
+                patch.object(self.converter, "update_html_file"),
+                patch.object(self.converter, "update_html_headers"),
+                patch.object(self.converter, "update_match_card_planner"),
+                patch.object(
+                    self.converter,
+                    "verify_outputs",
+                    side_effect=Exception("verification failed"),
+                ),
+                redirect_stdout(output),
+            ):
+                self.assertFalse(self.converter.convert())
+
+        self.assertNotIn(COMPLETION_ICON, output.getvalue())
 
 
 if __name__ == "__main__":

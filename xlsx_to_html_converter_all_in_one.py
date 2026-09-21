@@ -27,6 +27,7 @@ PROMOTION_NAMES_START = "// GENERATED PROMOTION NAMES START"
 PROMOTION_NAMES_END = "// GENERATED PROMOTION NAMES END"
 ROSTER_DATA_START = "// GENERATED ROSTER DATA START"
 ROSTER_DATA_END = "// GENERATED ROSTER DATA END"
+COMPLETION_ICON = "✅"
 
 class XlsxToHtmlConverter:
     def __init__(self, config_file=None):
@@ -634,7 +635,7 @@ class XlsxToHtmlConverter:
             )
             print()
 
-            print("完全変換ワークフロー完了")
+            print(f"{COMPLETION_ICON} 完全変換ワークフロー完了")
             print()
             print(f"出力ファイル: {target_file}")
             print(f"カード検討ツール: {planner_file}")
