@@ -1226,36 +1226,39 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
   }
   try {
     statusEl.textContent = 'ZIPを作成中…';
+    // ZIP内の元テキストも、画面右側の最新の編集内容にそろえる。
+    syncRawText();
+    const sourceText = document.getElementById('rawText').value;
     const zip = new JSZip();
     const settings = commonSettings();
-    const sequenceWidth = Math.max(2, String(matches.length + 1).length);
-    const sequence = number => `!${String(number).padStart(sequenceWidth, '0')}`;
 
-    // 「!」と連番により、Explorerの先頭でも OP → 試合 → ED の順を維持する
+    // 00=OP、01〜98=画面順のカード、99=ED とし、Explorerでも並び順を保つ。
     const opBlob = await canvasToPngBlob(createSectionCanvas('OP', settings));
-    zip.file(`${sequence(0)}_OP.png`, opBlob);
+    zip.file('!00_OP.png', opBlob);
 
     for (let mi=0; mi<matches.length; mi++){
       const canvas = document.querySelector(`#matchList canvas[data-mi="${mi}"]`);
       drawItem(canvas, matches[mi], settings);
       const blob = await canvasToPngBlob(canvas);
+      const sequence = String(mi + 1).padStart(2, '0');
       if(matches[mi].type==='section'){
-        zip.file(`${sequence(mi + 1)}_section.png`, blob);
+        zip.file(`!${sequence}_section.png`, blob);
       }else{
         const matchNo = String(matches[mi].no).padStart(2, '0');
-        zip.file(`${sequence(mi + 1)}_match_${matchNo}.png`, blob);
+        zip.file(`!${sequence}_match_${matchNo}.png`, blob);
       }
     }
 
     const edBlob = await canvasToPngBlob(createSectionCanvas('ED', settings));
-    zip.file(`${sequence(matches.length + 1)}_ED.png`, edBlob);
+    zip.file('!99_ED.png', edBlob);
+    zip.file('!元テキスト.txt', sourceText);
 
     const content = await zip.generateAsync({type:'blob'});
     const link = document.createElement('a');
     link.download = '!vs_cards.zip';
     link.href = URL.createObjectURL(content);
     link.click();
-    statusEl.textContent = `OP・${matches.length}枚のカード・EDをZIPにまとめてダウンロードしました。`;
+    statusEl.textContent = `OP・${matches.length}枚のカード・ED・元テキストをZIPにまとめてダウンロードしました。`;
   } catch (error) {
     statusEl.textContent = `ZIPの作成に失敗しました：${error.message}`;
   }
