@@ -34,11 +34,19 @@ test('3WAY以上の対戦枠を順番どおり読み込む', () => {
   assert.equal(match.parseOk, true);
 });
 
-test('イリミネーションの入場順を各選手のグループとして読み込む', () => {
-  const [match] = context.parseMatches(`第3試合　イリミネーション（入場順）
-入場順：1. 選手A → 2. 選手B → 3. 選手C`);
+test('ランブルの入場順を専用レイアウトとして読み込む', () => {
+  const [match] = context.parseMatches(`第0-1試合　ランブル
+入場順：1. 桐生真弥 → 2. アンドレザ・ジャイアントパンダ → 3. 小波 → 4. 琉悪夏 → 5. 清司麗菜 → 6. フキゲンです → 7. ビー・プレストリー → 8. コグマ → 9. 妃南 → 10. 林下詩美 → 11. 舞華 → 12. レディ・Ｃ → 13. 壮麗亜美 → 14. 月山和香 → 15. 虎龍清花 → 16. フワちゃん → 17. 稲葉あずさ
+※桐生真弥は、インカム着用`);
 
-  assert.deepEqual(plain(match.groups.map(group => group.members[0].name)), ['選手A', '選手B', '選手C']);
+  assert.equal(match.no, '0-1');
+  assert.equal(match.layout, 'entryOrder');
+  assert.deepEqual(plain(context.entryOrderMembers(match).map(member=>member.name)), [
+    '桐生真弥', 'アンドレザ・ジャイアントパンダ', '小波', '琉悪夏', '清司麗菜', 'フキゲンです',
+    'ビー・プレストリー', 'コグマ', '妃南', '林下詩美', '舞華', 'レディ・Ｃ', '壮麗亜美',
+    '月山和香', '虎龍清花', 'フワちゃん', '稲葉あずさ',
+  ]);
+  assert.deepEqual(plain(match.notes), ['桐生真弥は、インカム着用']);
   assert.equal(match.parseOk, true);
 });
 

@@ -404,7 +404,7 @@ function parsePlannerCopyText(text) {
     const leftTeam=groups[0]?.members||[{name:'',mark:''}];
     const rightTeam=groups[1]?.members||[{name:'',mark:''}];
     return {
-      type:'match', no:numberMatch?normalizeMatchNumber(numberMatch[1]):String(index+1), rule:header[2].trim(), isTitle:false,
+      type:'match', no:numberMatch?normalizeMatchNumber(numberMatch[1]):String(index+1), rule:header[2].trim(), layout:entryOrder?'entryOrder':'match', isTitle:false,
       titleMode:'none', championGroup:-1, time:'', technique:'', groups, leftTeam, rightTeam, notes,
       parseOk:groups.length>=2&&groups.every(group=>group.members.length>0)
     };
@@ -434,7 +434,7 @@ function parseEditableText(text) {
     const head=line.match(/^([0-9０-９]+(?:\s*[-－‐‑–—ー]\s*[0-9０-９]+)*)、(.*)$/);
     if(head){
       flush();
-      current={type:'match',no:normalizeMatchNumber(head[1]),rule:head[2],isTitle:false,titleMode:'none',championGroup:-1,
+      current={type:'match',no:normalizeMatchNumber(head[1]),rule:head[2],layout:'match',isTitle:false,titleMode:'none',championGroup:-1,
         time:'',technique:'',groups:[],notes:[],parseOk:true};
       continue;
     }
@@ -449,7 +449,8 @@ function parseEditableText(text) {
     const field=line.match(/^【([^】]+)】(.*)$/);
     if(!field)continue;
     const key=field[1], value=field[2].trim();
-    if(key==='タイトル区分'){
+    if(key==='表示形式')current.layout=value==='入場順'?'entryOrder':'match';
+    else if(key==='タイトル区分'){
       current.titleMode=({通常タイトル戦:'title',王者決定戦:'vacant',非タイトル戦:'none'})[value]||'none';
       current.isTitle=current.titleMode!=='none';
     }else if(key==='王者グループ')current.championGroup=value?Math.max(-1,+value-1):-1;
@@ -572,6 +573,11 @@ function outputCardFilename(item,index,zipEntry=false){
   return `${prefix}match_${matchNo}.png`;
 }
 
+function entryOrderMembers(match){
+  if(match.layout!=='entryOrder')return [];
+  return (match.groups||[]).flatMap(group=>group.members||[]).filter(member=>String(member.name||'').trim());
+}
+
 function validateItem(item){
   if(item.type==='section')return String(item.title||'').trim()?'':'コーナー名を入力してください。';
   return validateMatch(item);
@@ -600,7 +606,9 @@ function serializeEditableText(){
   const cards=matches.map(item=>{
     if(item.type==='section')return `【コーナー】\n${String(item.title||'')}\n【コーナー終了】`;
     const titleLabel=({title:'通常タイトル戦',vacant:'王者決定戦',none:'非タイトル戦'})[item.titleMode||'none'];
-    const lines=[`${item.no}、${item.rule||''}`,`【タイトル区分】${titleLabel}`];
+    const lines=[`${item.no}、${item.rule||''}`];
+    if(item.layout==='entryOrder')lines.push('【表示形式】入場順');
+    lines.push(`【タイトル区分】${titleLabel}`);
     if((item.titleMode||'none')==='title')lines.push(`【王者グループ】${item.championGroup>=0?item.championGroup+1:''}`);
     (item.groups||[]).forEach(group=>{
       const members=(group.members||[]).map(member=>`${member.mark||''}${member.name||''}`).join('＆');
@@ -696,7 +704,8 @@ function drawMatch(canvas, match, settings) {
   ctx.fillStyle = settings.textColor;
   ctx.textAlign = 'left';
   const cleanRule = stripRuleTime(match.rule);
-  const formatText = groups.length === 2 ? 'VS' : `${groups.length}WAY`;
+  const isEntryOrder=match.layout==='entryOrder';
+  const formatText = isEntryOrder ? '入場順' : (groups.length === 2 ? 'VS' : `${groups.length}WAY`);
   const headerText = cleanRule ? `第${match.no}試合　${cleanRule}` : `第${match.no}試合`;
 
   let headerSize = headerBaseSize;
@@ -860,7 +869,30 @@ function drawMatch(canvas, match, settings) {
   }
 
   const areaH = nameAreaBottom-nameAreaTop;
-  if (groups.length === 2) {
+  if(isEntryOrder){
+    const entrants=entryOrderMembers(match);
+    const columns=entrants.length>9?2:1;
+    const rows=Math.max(1,Math.ceil(entrants.length/columns));
+    const columnGap=size*0.025;
+    const columnWidth=(size*0.94-columnGap*(columns-1))/columns;
+    const rowGap=size*0.008;
+    const rowHeight=(areaH-rowGap*(rows-1))/rows;
+    entrants.forEach((member,index)=>{
+      const column=Math.floor(index/rows);
+      const row=index%rows;
+      const x=size*0.03+column*(columnWidth+columnGap);
+      const y=nameAreaTop+row*(rowHeight+rowGap);
+      ctx.strokeStyle=settings.textColor;
+      ctx.lineWidth=Math.max(1,size*0.002);
+      ctx.strokeRect(x,y,columnWidth,rowHeight);
+      const numberWidth=Math.min(columnWidth*0.16,size*0.065);
+      ctx.fillStyle=settings.accentColor;
+      ctx.font=`900 ${Math.round(Math.min(size*0.033,rowHeight*0.42))}px "Yu Gothic UI",sans-serif`;
+      ctx.textAlign='center';
+      ctx.fillText(String(index+1),x+numberWidth/2,y+rowHeight/2,numberWidth*0.8);
+      drawMember(member,x+numberWidth+(columnWidth-numberWidth)/2,columnWidth-numberWidth-size*0.025,y+rowHeight/2,Math.min(size*0.052,rowHeight*0.52));
+    });
+  } else if (groups.length === 2) {
     const gap=size*0.055, w=(size*0.94-gap)/2;
     drawGroup(groups[0],0,size*0.03,nameAreaTop,w,areaH);
     drawGroup(groups[1],1,size*0.03+w+gap,nameAreaTop,w,areaH);
