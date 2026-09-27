@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const html = fs.readFileSync(new URL('./match_vs_generator_1.html', import.meta.url), 'utf8');
+const html = fs.readFileSync(new URL('./match_vs_generator.html', import.meta.url), 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/gi)];
 const applicationScript = scripts.at(-1)?.[1] ?? '';
 const parserScript = applicationScript.split('/* ========== 状態管理 ========== */')[0];

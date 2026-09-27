@@ -42,9 +42,9 @@ URL履歴を含む画面機能を確認するときは、ローカルWebサー�
 
 ## VSカード画像生成ツール
 
-[VSカード画像生成ツールを開く](./match_vs_generator_1.html)
+[VSカード画像生成ツールを開く](./match_vs_generator.html)
 
-`match_vs_generator_1.html` は、試合結果のテキストから試合ごとのVSカード画像を作るツールです。
+`match_vs_generator.html` は、試合結果のテキストから試合ごとのVSカード画像を作るツールです。
 個別PNGまたはZIPで保存できます。
 
 - 対戦グループを追加して3WAY・4WAY以上の結果カードを作成（「3WAY」と「もう1組は、…」の記述は自動解析）
@@ -101,7 +101,7 @@ Node.js標準のテストランナーで `test_index_ui.mjs` の画面ロジッ�
 
 - `index.html`：女子プロレスラー一覧
 - `match_card_planner.html`：試合カード組み立て
-- `match_vs_generator_1.html`：VSカード画像生成
+- `match_vs_generator.html`：VSカード画像生成
 - `woman-excel.xlsx`：選手データ
 - `xlsx_to_html_converter_all_in_one.py`：Excelデータ反映スクリプト
 - `converter_config.json`：変換設定
