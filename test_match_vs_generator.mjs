@@ -42,11 +42,40 @@ test('イリミネーションの入場順を各選手のグループとして�
   assert.equal(match.parseOk, true);
 });
 
-test('編集された試合番号ラベルでも読み込む', () => {
-  const [match] = context.parseMatches(`第0試合-1　オープニングマッチ
+test('第0-1試合を複合した試合番号として読み込む', () => {
+  const [match] = context.parseMatches(`第0-1試合　ランブル
 選手A VS 選手B`);
 
-  assert.equal(match.no, '0');
-  assert.equal(match.rule, 'オープニングマッチ');
+  assert.equal(match.no, '0-1');
+  assert.equal(match.rule, 'ランブル');
   assert.equal(match.parseOk, true);
+});
+
+test('出力ファイル名の先頭番号は試合番号でなく画面の並び順を使う', () => {
+  const items = [
+    {type:'match', no:'3'},
+    {type:'match', no:'0-1'},
+    {type:'section'},
+    {type:'match', no:'1'},
+  ];
+
+  assert.deepEqual(plain(items.map((item,index)=>context.outputCardFilename(item,index,true))), [
+    '!01_match_03.png',
+    '!02_match_0-1.png',
+    '!03_section.png',
+    '!04_match_01.png',
+  ]);
+  assert.equal(context.outputCardFilename(items[1],1), '02_match_0-1.png');
+});
+
+test('勝者が未設定でもZIP出力の検証エラーにしない', () => {
+  const [match] = context.parseMatches(`第0-1試合　ランブル
+選手A VS 選手B`);
+
+  assert.equal(context.validateMatch(match), '');
+  assert.equal(context.matchWarning(match), '勝敗が設定されていません。');
+
+  match.groups[0].members[0].mark = '○';
+  match.groups[1].members[0].mark = '●';
+  assert.equal(context.matchWarning(match), '');
 });

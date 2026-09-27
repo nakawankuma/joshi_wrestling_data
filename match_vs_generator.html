@@ -155,6 +155,7 @@
     font-weight:700;
     color:var(--accent);
   }
+  .match-warning{font-size:11px; color:var(--danger); margin-left:8px;}
   .match-body{
     display:flex;
     gap:16px;
@@ -352,10 +353,10 @@ function parseMatches(text) {
       continue;
     }
 
-    const headMatch = line.match(/^(\d+)、(.+)$/);
+    const headMatch = line.match(/^([0-9０-９]+(?:\s*[-－‐‑–—ー]\s*[0-9０-９]+)*)、(.+)$/);
     if (headMatch) {
       if (cur) matches.push(cur);
-      cur = { no: headMatch[1], ruleLine: headMatch[2], bodyLines: [], noteLines: [] };
+      cur = { no: normalizeMatchNumber(headMatch[1]), ruleLine: headMatch[2], bodyLines: [], noteLines: [] };
       continue;
     }
     if (line.startsWith('※')) {
@@ -369,9 +370,13 @@ function parseMatches(text) {
   return matches.map(parseSingleMatch);
 }
 
+function normalizeMatchNumber(value) {
+  return value.replace(/[０-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0))
+    .replace(/\s*[-－‐‑–—ー]\s*/g, '-');
+}
+
 // match_card_planner.html の「テキストをコピー」形式を読む。
 function parsePlannerCopyText(text) {
-  const toHalfWidthDigits=value=>value.replace(/[０-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
   const parseMembers=value=>value.split(/　*＆　*/).map(name=>name.trim())
     .filter(name=>name&&name!=='（未定）').map(name=>({name,mark:''}));
   const blocks=text.trim().split(/\r?\n\s*\r?\n/).filter(Boolean);
@@ -385,7 +390,7 @@ function parsePlannerCopyText(text) {
         time:'',technique:'',groups:[],leftTeam:[{name:'',mark:''}],rightTeam:[{name:'',mark:''}],notes:[],parseOk:false};
     }
 
-    const numberMatch=header[1].match(/第\s*([0-9０-９]+)\s*試合/);
+    const numberMatch=header[1].match(/第\s*([0-9０-９]+(?:\s*[-－‐‑–—ー]\s*[0-9０-９]+)*)\s*試合/);
     const cardLine=lines.shift()||'';
     let groups=[];
     const entryOrder=cardLine.match(/^入場順[：:]\s*(.*)$/);
@@ -399,7 +404,7 @@ function parsePlannerCopyText(text) {
     const leftTeam=groups[0]?.members||[{name:'',mark:''}];
     const rightTeam=groups[1]?.members||[{name:'',mark:''}];
     return {
-      type:'match', no:numberMatch?toHalfWidthDigits(numberMatch[1]):String(index+1), rule:header[2].trim(), isTitle:false,
+      type:'match', no:numberMatch?normalizeMatchNumber(numberMatch[1]):String(index+1), rule:header[2].trim(), isTitle:false,
       titleMode:'none', championGroup:-1, time:'', technique:'', groups, leftTeam, rightTeam, notes,
       parseOk:groups.length>=2&&groups.every(group=>group.members.length>0)
     };
@@ -426,10 +431,10 @@ function parseEditableText(text) {
       eventName=line.slice('【イベント名】'.length).trim();
       continue;
     }
-    const head=line.match(/^(\d+)、(.*)$/);
+    const head=line.match(/^([0-9０-９]+(?:\s*[-－‐‑–—ー]\s*[0-9０-９]+)*)、(.*)$/);
     if(head){
       flush();
-      current={type:'match',no:head[1],rule:head[2],isTitle:false,titleMode:'none',championGroup:-1,
+      current={type:'match',no:normalizeMatchNumber(head[1]),rule:head[2],isTitle:false,titleMode:'none',championGroup:-1,
         time:'',technique:'',groups:[],notes:[],parseOk:true};
       continue;
     }
@@ -557,6 +562,35 @@ function stripRuleTime(rule){
   // 末尾の（〇分1本勝負）のような括弧書きだけ除去（大会名・タイトル名は残す）
   s = s.replace(/[（(]\s*\d+分\d*本勝負\s*[）)]\s*$/, '').trim();
   return s;
+}
+
+function outputCardFilename(item,index,zipEntry=false){
+  const sequence=String(index+1).padStart(2,'0');
+  const prefix=zipEntry?`!${sequence}_`:`${sequence}_`;
+  if(item.type==='section')return `${prefix}section.png`;
+  const matchNo=String(item.no).padStart(2,'0');
+  return `${prefix}match_${matchNo}.png`;
+}
+
+function validateItem(item){
+  if(item.type==='section')return String(item.title||'').trim()?'':'コーナー名を入力してください。';
+  return validateMatch(item);
+}
+
+function validateMatch(match){
+  const groups=match.groups||[];
+  if(groups.length<2)return '対戦グループは2つ以上必要です。';
+  if(groups.some(group=>!group.members?.some(member=>String(member.name||'').trim())))return '選手名が空の対戦グループがあります。';
+  const winners=groups.filter(group=>group.members.some(member=>member.mark==='○')).length;
+  if(winners>1)return '○が複数の対戦グループにあります。勝者グループは1つにしてください。';
+  if((match.titleMode||'none')==='title'&&(match.championGroup<0||match.championGroup>=groups.length))return '通常タイトル戦では、試合前王者を指定してください。';
+  return '';
+}
+
+function matchWarning(match){
+  if(match.type==='section')return '';
+  const hasResult=(match.groups||[]).some(group=>(group.members||[]).some(member=>member.mark==='○'||member.mark==='●'));
+  return hasResult?'':'勝敗が設定されていません。';
 }
 
 /* ========== 状態管理 ========== */
@@ -902,6 +936,7 @@ function renderMatchList(){
     wrap.innerHTML = `
       <div class="match-head">
         <span class="no">第${match.no}試合 ${match.parseOk ? '' : '（要確認：自動解析に失敗した可能性）'}</span>
+        <span class="match-warning" data-warning-mi="${mi}">${matchWarning(match)}</span>
         <button class="del-match" data-mi="${mi}">この試合を削除</button>
       </div>
       <div class="match-body">
@@ -1030,6 +1065,8 @@ function bindMatchListEvents(){
       const mi = +el.dataset.mi, gi=+el.dataset.gi, idx = +el.dataset.idx;
       matches[mi].groups[gi].members[idx][el.dataset.mfield] = el.value;
       if(el.tagName==='SELECT')syncRawText();
+      const warningEl=listEl.querySelector(`[data-warning-mi="${mi}"]`);
+      if(warningEl)warningEl.textContent=matchWarning(matches[mi]);
       redrawOne(mi);
     });
     if(el.tagName==='INPUT')el.addEventListener('blur',syncRawText);
@@ -1098,9 +1135,7 @@ function bindMatchListEvents(){
       if(problem){alert(`画像を保存できません。\n${problem}`);return;}
       const canvas = listEl.querySelector(`canvas[data-mi="${mi}"]`);
       const link = document.createElement('a');
-      link.download = matches[mi].type==='section'
-        ? `section_${String(mi+1).padStart(2,'0')}.png`
-        : `match_${String(matches[mi].no).padStart(2,'0')}.png`;
+      link.download = outputCardFilename(matches[mi],mi);
       link.href = canvas.toDataURL('image/png');
       link.click();
     });
@@ -1130,22 +1165,6 @@ function drawSection(canvas,title,settings){
   canvas.width=sectionCanvas.width;
   canvas.height=sectionCanvas.height;
   canvas.getContext('2d').drawImage(sectionCanvas,0,0);
-}
-
-function validateItem(item){
-  if(item.type==='section')return String(item.title||'').trim()?'':'コーナー名を入力してください。';
-  return validateMatch(item);
-}
-
-function validateMatch(match){
-  const groups=match.groups||[];
-  if(groups.length<2)return '対戦グループは2つ以上必要です。';
-  if(groups.some(group=>!group.members?.some(member=>String(member.name||'').trim())))return '選手名が空の対戦グループがあります。';
-  const winners=groups.filter(group=>group.members.some(member=>member.mark==='○')).length;
-  if(winners===0)return '勝者の選手に○を設定してください。';
-  if(winners>1)return '○が複数の対戦グループにあります。勝者グループは1つにしてください。';
-  if((match.titleMode||'none')==='title'&&(match.championGroup<0||match.championGroup>=groups.length))return '通常タイトル戦では、試合前王者を指定してください。';
-  return '';
 }
 
 // ZIP専用の区切り画像。画面上のカード一覧には追加しない。
@@ -1251,6 +1270,7 @@ document.getElementById('eventName').addEventListener('blur',syncRawText);
 
 document.getElementById('zipBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('zipStatus');
+  statusEl.className='meta';
   if (matches.length === 0) {
     statusEl.textContent = '出力対象の試合がありません。先にテキストを解析してください。';
     return;
@@ -1278,13 +1298,7 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
       const canvas = document.querySelector(`#matchList canvas[data-mi="${mi}"]`);
       drawItem(canvas, matches[mi], settings);
       const blob = await canvasToPngBlob(canvas);
-      const sequence = String(mi + 1).padStart(2, '0');
-      if(matches[mi].type==='section'){
-        zip.file(`!${sequence}_section.png`, blob);
-      }else{
-        const matchNo = String(matches[mi].no).padStart(2, '0');
-        zip.file(`!${sequence}_match_${matchNo}.png`, blob);
-      }
+      zip.file(outputCardFilename(matches[mi],mi,true), blob);
     }
 
     const edBlob = await canvasToPngBlob(createSectionCanvas('ED', settings));
@@ -1296,7 +1310,13 @@ document.getElementById('zipBtn').addEventListener('click', async () => {
     link.download = '!vs_cards.zip';
     link.href = URL.createObjectURL(content);
     link.click();
-    statusEl.textContent = `OP・${matches.length}枚のカード・ED・元テキストをZIPにまとめてダウンロードしました。`;
+    const warnings=matches.filter(match=>matchWarning(match)).map(match=>`第${match.no}試合`);
+    if(warnings.length){
+      statusEl.className='warn';
+      statusEl.textContent=`ZIPを出力しました。警告：${warnings.join('、')}は勝敗が設定されていません。`;
+    }else{
+      statusEl.textContent = `OP・${matches.length}枚のカード・ED・元テキストをZIPにまとめてダウンロードしました。`;
+    }
   } catch (error) {
     statusEl.textContent = `ZIPの作成に失敗しました：${error.message}`;
   }
