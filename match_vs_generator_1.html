@@ -341,6 +341,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 /* ========== パーサー ========== */
 function parseMatches(text) {
   if (/^【(?:イベント名|グループ|コーナー)】/m.test(text)) return parseEditableText(text);
+  if (/^[^\r\n]+[\t　]+[^\r\n]+\r?\n(?:.*\sVS\s.*|入場順[：:])/mi.test(text)) return parsePlannerCopyText(text);
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const matches = [];
   let cur = null;
@@ -366,6 +367,43 @@ function parseMatches(text) {
   if (cur) matches.push(cur);
 
   return matches.map(parseSingleMatch);
+}
+
+// match_card_planner.html の「テキストをコピー」形式を読む。
+function parsePlannerCopyText(text) {
+  const toHalfWidthDigits=value=>value.replace(/[０-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  const parseMembers=value=>value.split(/　*＆　*/).map(name=>name.trim())
+    .filter(name=>name&&name!=='（未定）').map(name=>({name,mark:''}));
+  const blocks=text.trim().split(/\r?\n\s*\r?\n/).filter(Boolean);
+
+  return blocks.map((block,index)=>{
+    const lines=block.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    const headerLine=lines.shift()||'';
+    const header=headerLine.match(/^(.+?)[\t　]+(.+)$/);
+    if(!header){
+      return {type:'match',no:String(index+1),rule:'',isTitle:false,titleMode:'none',championGroup:-1,
+        time:'',technique:'',groups:[],leftTeam:[{name:'',mark:''}],rightTeam:[{name:'',mark:''}],notes:[],parseOk:false};
+    }
+
+    const numberMatch=header[1].match(/第\s*([0-9０-９]+)\s*試合/);
+    const cardLine=lines.shift()||'';
+    let groups=[];
+    const entryOrder=cardLine.match(/^入場順[：:]\s*(.*)$/);
+    if(entryOrder){
+      groups=entryOrder[1].split(/\s*→\s*/).map(entry=>entry.replace(/^\d+\.\s*/, '').trim())
+        .filter(name=>name&&name!=='（未定）').map(name=>({members:[{name,mark:''}]}));
+    }else{
+      groups=cardLine.split(/\s+VS\s+/i).map(side=>({members:parseMembers(side)}));
+    }
+    const notes=lines.length ? [lines.join('\n').replace(/^※/, '').trim()].filter(Boolean) : [];
+    const leftTeam=groups[0]?.members||[{name:'',mark:''}];
+    const rightTeam=groups[1]?.members||[{name:'',mark:''}];
+    return {
+      type:'match', no:numberMatch?toHalfWidthDigits(numberMatch[1]):String(index+1), rule:header[2].trim(), isTitle:false,
+      titleMode:'none', championGroup:-1, time:'', technique:'', groups, leftTeam, rightTeam, notes,
+      parseOk:groups.length>=2&&groups.every(group=>group.members.length>0)
+    };
+  });
 }
 
 // 右側の編集内容を書き戻すための、欠落のない編集用テキスト形式を読む。

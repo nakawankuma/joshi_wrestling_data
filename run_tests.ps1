@@ -22,7 +22,7 @@ try {
         throw 'Node.jsがありません。画面ロジックのテストにはNode.jsが必要です。'
     }
 
-    & $nodeCommand.Source --test test_index_ui.mjs
+    & $nodeCommand.Source --test test_index_ui.mjs test_match_card_planner.mjs test_match_vs_generator.mjs
     if ($LASTEXITCODE -ne 0) {
         throw "画面ロジックのテストに失敗しました（終了コード: $LASTEXITCODE）"
     }
