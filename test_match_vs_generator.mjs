@@ -34,6 +34,29 @@ test('3WAY以上の対戦枠を順番どおり読み込む', () => {
   assert.equal(match.parseOk, true);
 });
 
+test('残り2組の備考から4WAYタッグの全グループを読み込む', () => {
+  const [match] = context.parseMatches(`4、4WAYタッグマッチ（30分1本勝負）
+○バラモンシュウ＆バラモンケイ（14分8秒、五体不満足）髙木三四郎●＆一般人・澤宗紀
+※残り2組はタノムサク鳥羽＆ジムトレーナーKotoka、阿部史典＆Mac松下
+
+選手コメント/寸評`);
+
+  assert.equal(match.no, '4');
+  assert.equal(match.time, '14分8秒');
+  assert.equal(match.technique, '五体不満足');
+  assert.deepEqual(plain(match.groups.map(group=>group.members.map(member=>member.name))), [
+    ['バラモンシュウ', 'バラモンケイ'],
+    ['髙木三四郎', '一般人・澤宗紀'],
+    ['タノムサク鳥羽', 'ジムトレーナーKotoka'],
+    ['阿部史典', 'Mac松下'],
+  ]);
+  assert.deepEqual(plain(match.groups.map(group=>group.members.map(member=>member.mark))), [
+    ['○', ''], ['●', ''], ['', ''], ['', ''],
+  ]);
+  assert.deepEqual(plain(match.notes), []);
+  assert.equal(match.parseOk, true);
+});
+
 test('ランブルの入場順を専用レイアウトとして読み込む', () => {
   const [match] = context.parseMatches(`第0-1試合　ランブル
 入場順：1. 桐生真弥 → 2. アンドレザ・ジャイアントパンダ → 3. 小波 → 4. 琉悪夏 → 5. 清司麗菜 → 6. フキゲンです → 7. ビー・プレストリー → 8. コグマ → 9. 妃南 → 10. 林下詩美 → 11. 舞華 → 12. レディ・Ｃ → 13. 壮麗亜美 → 14. 月山和香 → 15. 虎龍清花 → 16. フワちゃん → 17. 稲葉あずさ

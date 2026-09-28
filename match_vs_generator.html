@@ -524,13 +524,22 @@ function parseSingleMatch(m) {
 
   const groups = [leftTeam, rightTeam].map(members=>({members}));
 
-  // 「3WAY...」かつ「もう1組は、...」の形式では、備考から第3グループを復元する。
+  // 「もう1組は」「残り2組は」の形式では、備考から追加グループを復元する。
   const wayMatch = m.ruleLine.match(/([3-9３-９])\s*(?:WAY|ＷＡＹ)/i);
   const expectedGroups = wayMatch ? +toHalfWidthDigits(wayMatch[1]) : 2;
   const remainingNotes=[];
   for(const note of m.noteLines){
+    const remainingMatch=note.match(/^(.*?)(?:。)?残り([0-9０-９]+)組は[、,:：]?\s*(.+)$/);
     const extraMatch=note.match(/^(.*?)(?:。)?もう1組は[、,:：]\s*(.+)$/);
-    if(extraMatch && groups.length<expectedGroups){
+    if(remainingMatch && groups.length<expectedGroups){
+      const count=+toHalfWidthDigits(remainingMatch[2]);
+      const extraGroups=remainingMatch[3].split(/\s*[、,]\s*/).filter(Boolean);
+      if(extraGroups.length===count && groups.length+count<=expectedGroups){
+        extraGroups.forEach(group=>groups.push({members:parseSide(group)}));
+        const noteBeforeGroups=remainingMatch[1].replace(/。\s*$/,'').trim();
+        if(noteBeforeGroups)remainingNotes.push(noteBeforeGroups);
+      }else remainingNotes.push(note);
+    }else if(extraMatch && groups.length<expectedGroups){
       groups.push({members:parseSide(extraMatch[2])});
       const noteBeforeGroup=extraMatch[1].replace(/。\s*$/,'').trim();
       if(noteBeforeGroup)remainingNotes.push(noteBeforeGroup);
