@@ -926,7 +926,8 @@ function drawMatch(canvas, match, settings) {
 /* ========== エディタUI構築 ========== */
 function markOptions(current){
   const opts = ['', '○', '●'];
-  return opts.map(o=>`<option value="${o}" ${o===current?'selected':''}>${o===''?'なし':o}</option>`).join('');
+  const labels = {'':'－','○':'勝ち','●':'負け'};
+  return opts.map(o=>`<option value="${o}" ${o===current?'selected':''}>${labels[o]}</option>`).join('');
 }
 
 function renderMatchList(){
