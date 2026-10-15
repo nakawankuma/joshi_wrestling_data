@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -25,6 +26,19 @@ class XlsxToHtmlConverterTest(unittest.TestCase):
 
     def make_dataframe(self, rows):
         return pd.DataFrame(rows)
+
+    def test_comment_lines_are_excluded_from_both_outputs_and_validation(self):
+        df = self.make_dataframe([
+            [None, "デビュー年", "A"],
+            [None, 2026, "選手A\n //選手A\n\t//非表示\n選手B//注記"],
+            [None, None, " //年度なしコメント"],
+        ])
+        roster = self.converter.convert_to_roster_data(df, ["A"])
+        self.assertEqual(roster, {"A": ["選手A", "選手B//注記"]})
+        self.converter.validate_source_data(df, ["A"], roster)
+        declaration = self.converter.convert_to_js_array(df)
+        data = json.loads(declaration.split(" = ", 1)[1][:-1])
+        self.assertEqual(data, [["2026", "選手A\n選手B//注記"]])
 
     def test_marker_replacement_allows_terminator_inside_json_string(self):
         content = "// START\nconst data = [\"name ]; value\"];\n// END"

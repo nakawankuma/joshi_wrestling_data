@@ -119,6 +119,17 @@ class XlsxToHtmlConverter:
         return str(value).replace("（", "(").replace("）", ")")
 
     @staticmethod
+    def active_wrestler_names(value):
+        """空行と、前後の空白を除いた行頭が//のコメント行を除外する。"""
+        if pd.isna(value):
+            return []
+        names = (
+            XlsxToHtmlConverter.normalize_parentheses(line).strip()
+            for line in str(value).splitlines()
+        )
+        return [name for name in names if name and not name.startswith("//")]
+
+    @staticmethod
     def normalize_year(year, excel_row_number):
         """年度欄を検証して文字列へ正規化する"""
         if isinstance(year, Real) and not isinstance(year, bool):
@@ -221,7 +232,7 @@ class XlsxToHtmlConverter:
                 else:
                     # セルの値を文字列に変換し、HTMLエスケープ処理を実行
                     # <, >, &, ", ' などの特殊文字を &lt;, &gt;, &amp;, &quot;, &#x27; に変換
-                    cell_str = self.normalize_parentheses(cell_value).strip()
+                    cell_str = "\n".join(self.active_wrestler_names(cell_value))
                     escaped_str = html.escape(cell_str, quote=True)
                     row_data.append(escaped_str)
             
@@ -259,10 +270,7 @@ class XlsxToHtmlConverter:
                 if pd.notna(cell_value):
                     # Excelの1セルに改行区切りで複数選手が入っていても、
                     # rosterDataでは「1選手 = 1要素」に正規化する。
-                    wrestler_names = (
-                        self.normalize_parentheses(name).strip()
-                        for name in str(cell_value).splitlines()
-                    )
+                    wrestler_names = self.active_wrestler_names(cell_value)
                     roster_data[promotion_name].extend(
                         html.escape(name, quote=True)
                         for name in wrestler_names
@@ -282,7 +290,7 @@ class XlsxToHtmlConverter:
 
             promotion_cells = row.iloc[2:2 + len(promotion_names)]
             has_wrestler_data = any(
-                pd.notna(value) and str(value).strip()
+                bool(self.active_wrestler_names(value))
                 for value in promotion_cells
             )
             year = row.iloc[1]
