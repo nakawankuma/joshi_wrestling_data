@@ -102,6 +102,34 @@
             transform: translateY(-1px);
         }
         
+        .other-tools {
+            margin-top: 30px;
+            padding: 24px;
+            border: 1px solid #e0e4f5;
+            border-radius: 12px;
+            background: #f5f6fc;
+        }
+
+        .other-tools h2 {
+            margin: 0 0 16px;
+            font-size: 1.25rem;
+        }
+
+        .other-tools .tool-links {
+            justify-content: flex-start;
+            margin-top: 0;
+        }
+
+        .other-tools .tool-link {
+            background: #5263b8;
+            border-color: #5263b8;
+        }
+
+        .other-tools .tool-link:hover,
+        .other-tools .tool-link:focus-visible {
+            background: #3e4d96;
+        }
+
         .content {
             padding: 30px;
         }
@@ -802,6 +830,15 @@
                 </div>
             </div>
             
+            <section class="other-tools" aria-labelledby="other-tools-title">
+                <h2 id="other-tools-title">その他のツール</h2>
+                <nav class="tool-links" aria-label="その他のツール">
+                    <a class="tool-link" href="match_card_planner.html">試合カード組み立てツール</a>
+                    <a class="tool-link" href="match_vs_generator.html">VSカード画像生成ツール</a>
+                    <a class="tool-link" href="https://nakawankuma.github.io/GoddessesLeague2026Evaluation/">Stardomゴッデスタッグリーグ2026予想ツール</a>
+                </nav>
+            </section>
+
             <!-- デバッグコントロール（一番下に小さく配置） -->
             <div class="debug-controls">
                 <button type="button" class="debug-toggle" onclick="toggleDebug()">🔧 デバッグ情報 表示/非表示</button>
