@@ -350,6 +350,7 @@ function parseMatches(text) {
   for (const line of lines) {
     // 試合結果ページに付随するコメント件数はカードへ含めない
     if (/^選手コメント\s*[/／]\s*寸評(?:\s*[×xX✕]\s*\d+)?\s*$/.test(line)) {
+      if(cur)cur.notesClosed=true;
       continue;
     }
 
@@ -360,7 +361,7 @@ function parseMatches(text) {
       continue;
     }
     if (line.startsWith('※')) {
-      if (cur) cur.noteLines.push(line.replace(/^※/, ''));
+      if (cur && !cur.notesClosed) cur.noteLines.push(line.replace(/^※/, ''));
       continue;
     }
     // 結果行の後に続く記事見出しや関連リンクを選手名へ混ぜない。
@@ -458,6 +459,8 @@ function parseEditableText(text) {
     else if(key==='グループ')current.groups.push({members:parseMembers(value)});
     else if(key==='決着時間')current.time=value;
     else if(key==='決まり技')current.technique=value;
+    else if(key==='結果スコア')current.score=value;
+    else if(key==='勝者グループ')current.winnerGroup=value?+value-1:-1;
     else if(key==='備考')current.notes.push(value);
   }
   flush();
@@ -465,7 +468,7 @@ function parseEditableText(text) {
     if(item.type==='section')return;
     item.leftTeam=item.groups[0]?.members||[{name:'',mark:''}];
     item.rightTeam=item.groups[1]?.members||[{name:'',mark:''}];
-    item.parseOk=item.groups.length>=2;
+    item.parseOk=!validateMatch(item);
   });
   document.getElementById('eventName').value=eventName;
   return items;
@@ -480,13 +483,14 @@ function parseSingleMatch(m) {
   // 全角数字（０-９）も半角数字と同様に数字として扱う
   const digit = '[0-9０-９]';
   const decisionRe = new RegExp(`[（(](${digit}+分${digit}+秒)[、,]\\s*([^）)]+)[）)]`);
-  const decisionMatch = bodyRaw.match(decisionRe) || bodyRaw.match(/[（(](時間切れ引き分け)[）)]/);
+  const decisionMatch = bodyRaw.match(decisionRe) || bodyRaw.match(/[（(](時間切れ引き分け)[）)]/) || (/イリミネーション/.test(m.ruleLine) ? bodyRaw.match(/[（(]([0-9０-９]+[-－][0-9０-９]+)[）)]/) : null);
 
   function toHalfWidthDigits(str){
     return str.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
   }
 
-  const time = decisionMatch ? toHalfWidthDigits(decisionMatch[1]) : '';
+  const score = decisionMatch && /^[0-9０-９]+[-－][0-9０-９]+$/.test(decisionMatch[1]) ? toHalfWidthDigits(decisionMatch[1]).replace('－','-') : '';
+  const time = decisionMatch && !score ? toHalfWidthDigits(decisionMatch[1]) : '';
   let technique = decisionMatch ? (decisionMatch[2] || '') : '';
 
   let leftRaw, rightRaw, parseOk = true;
@@ -568,6 +572,13 @@ function parseSingleMatch(m) {
     titleMode: isTitle ? 'title' : 'none',
     championGroup: leftWasChampion ? 0 : (rightWasChampion ? 1 : -1),
     time,
+    score,
+    winnerGroup: (()=>{
+      if(!score)return -1;
+      const teams=m.ruleLine.replace(/イリミネーション.*$/,'').split(/\s+vs\s+|対/i).map(team=>team.trim());
+      const found=teams.map((team,index)=>team && m.noteLines.some(note=>note.includes(team+'の勝利'))?index:-1).filter(index=>index>=0);
+      return teams.length===2 && found.length===1 ? found[0] : -1;
+    })(),
     technique,
     leftTeam: leftTeam.length ? leftTeam : [{name:'', mark:''}],
     rightTeam: rightTeam.length ? rightTeam : [{name:'', mark:''}],
@@ -608,6 +619,9 @@ function validateItem(item){
 
 function validateMatch(match){
   const groups=match.groups||[];
+  const way=String(match.rule||'').match(/([3-9３-９])\s*(?:WAY|ＷＡＹ)/i);
+  if(way && groups.length!==Number(way[1].replace(/[３-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0))))return 'WAY数と対戦グループ数が一致しません。';
+  if(match.winnerGroup!=null && match.winnerGroup!==-1 && (!Number.isInteger(match.winnerGroup)||match.winnerGroup<0||match.winnerGroup>=groups.length))return '勝者グループの指定が不正です。';
   if(groups.length<2)return '対戦グループは2つ以上必要です。';
   if(groups.some(group=>!group.members?.some(member=>String(member.name||'').trim())))return '選手名が空の対戦グループがあります。';
   const winners=groups.filter(group=>group.members.some(member=>member.mark==='○')).length;
@@ -618,7 +632,7 @@ function validateMatch(match){
 
 function matchWarning(match){
   if(match.type==='section')return '';
-  const hasResult=(match.groups||[]).some(group=>(group.members||[]).some(member=>member.mark==='○'||member.mark==='●'||member.mark==='△'));
+  const hasResult=(Number.isInteger(match.winnerGroup)&&match.winnerGroup>=0) || (match.groups||[]).some(group=>(group.members||[]).some(member=>member.mark==='○'||member.mark==='●'||member.mark==='△'));
   return hasResult?'':'勝敗が設定されていません。';
 }
 
@@ -637,6 +651,8 @@ function serializeEditableText(){
       const members=(group.members||[]).map(member=>`${member.mark||''}${member.name||''}`).join('＆');
       lines.push(`【グループ】${members}`);
     });
+    if(item.score)lines.push(`【結果スコア】${item.score}`);
+    if(Number.isInteger(item.winnerGroup)&&item.winnerGroup>=0)lines.push(`【勝者グループ】${item.winnerGroup+1}`);
     lines.push(`【決着時間】${item.time||''}`,`【決まり技】${item.technique||''}`);
     (item.notes||[]).forEach(note=>lines.push(`【備考】${note}`));
     return lines.join('\n');
@@ -704,7 +720,7 @@ function drawMatch(canvas, match, settings) {
     {members:match.leftTeam || []},
     {members:match.rightTeam || []}
   ];
-  const hasResultLine = settings.showTimeTech && (match.time || match.technique);
+  const hasResultLine = settings.showTimeTech && (match.time || match.technique || match.score);
   const hasNotes = settings.showNotes && match.notes.length;
   const titleMode = match.titleMode || (match.isTitle ? 'title' : 'none');
   const hasTitleTag = settings.showTitleTag && titleMode !== 'none';
@@ -829,6 +845,7 @@ function drawMatch(canvas, match, settings) {
 
   const winnerGroupIndexes=groups.map((group,index)=>group.members?.some(member=>member.mark==='○')?index:-1).filter(index=>index>=0);
   function groupResult(index){
+    if(Number.isInteger(match.winnerGroup)&&match.winnerGroup>=0)return match.winnerGroup===index?'winner':'loser';
     if(groups.every(group=>group.members.some(member=>member.mark==='△')))return 'draw';
     if(winnerGroupIndexes.length!==1)return 'unknown';
     return winnerGroupIndexes[0]===index?'winner':'loser';
@@ -933,7 +950,7 @@ function drawMatch(canvas, match, settings) {
   if (hasResultLine) {
     ctx.textAlign = 'center';
     ctx.fillStyle = settings.textColor;
-    const resultLines = [match.time, match.technique].filter(Boolean);
+    const resultLines = [match.score ? '結果スコア：'+match.score : match.time, match.technique].filter(Boolean);
     resultLines.forEach((line,index)=>{
       fitFont(line, size*0.9, size*0.032, 'bold');
       ctx.fillText(line, size/2, size*(0.855+index*0.045), size*0.9);
@@ -1023,6 +1040,15 @@ function renderMatchList(){
               <input type="text" data-field="technique" data-mi="${mi}" value="${escapeAttr(match.technique)}">
             </div>
           </div>
+          <div class="inline-fields">
+            <div><label>結果スコア（イリミネーション等）</label>
+              <input type="text" data-field="score" data-mi="${mi}" value="${escapeAttr(match.score||'')}"></div>
+            <div><label>チームとしての勝者</label>
+              <select data-field="winnerGroup" data-mi="${mi}">
+                <option value="-1">未指定（個人の勝敗を使用）</option>
+                ${(match.groups||[]).map((group,gi)=>`<option value="${gi}" ${match.winnerGroup===gi?'selected':''}>グループ${String.fromCharCode(65+gi)}</option>`).join('')}
+              </select></div>
+          </div>
           <label>備考（※）</label>
           <input type="text" data-field="notes" data-mi="${mi}" value="${escapeAttr(match.notes.join(' / '))}">
         </div>
@@ -1097,8 +1123,9 @@ function bindMatchListEvents(){
       } else if (field === 'isTitle') {
         matches[mi].isTitle = el.checked;
       } else {
-        matches[mi][field] = el.value;
+        matches[mi][field] = field==='winnerGroup' ? Number(el.value) : el.value;
       }
+      if(field==='winnerGroup')syncRawText();
       if (field === 'titleMode') {
         matches[mi].isTitle = el.value !== 'none';
         if (el.value !== 'title') matches[mi].championGroup = -1;
@@ -1164,6 +1191,8 @@ function bindMatchListEvents(){
       const mi=+el.dataset.mi, gi=+el.dataset.gi;
       if(matches[mi].groups.length<=2)return;
       matches[mi].groups.splice(gi,1);
+      if(matches[mi].winnerGroup===gi)matches[mi].winnerGroup=-1;
+      else if(matches[mi].winnerGroup>gi)matches[mi].winnerGroup--;
       if(matches[mi].championGroup===gi)matches[mi].championGroup=-1;
       else if(matches[mi].championGroup>gi)matches[mi].championGroup--;
       syncRawText();

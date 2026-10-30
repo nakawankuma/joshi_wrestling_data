@@ -166,3 +166,90 @@ test('画像描画へ決着時間・決まり技・引き分け防衛を渡す',
   assert.ok(labels.includes('レディ・C'));
   assert.ok(labels.includes('みちのくドライバーⅡ→片エビ固め'));
 });
+
+const october29=`週刊プロレス・デジタル
+10/29 スターダム
+STARDOM CRIMSON NIGHTMARE 2026
+1、20分1本勝負
+○AZM＆天咲光由（8分13秒、片エビ固め）星来芽依＆儛島エマ●
+※ダイビング・フットスタンプ
+タッグリーグ不参加の王者組・AZM＆天咲はアメリカへ
+選手コメント/寸評  ×5
+2、3WAYトリオバトル（20分1本勝負）
+○伊藤麻希＆古沢稀杏＆梨杏（9分56秒、片エビ固め）山下りな＆青木いつ希＆鉄アキラ●
+※ダブルアームDDT。もう1組は朱里＆壮麗亜美＆妃南
+選手コメント/寸評  ×10
+2・11エディオンアリーナ大阪、3・6広島サンプラザ、シンデレラ・トーナメント2027決定
+選手コメント/寸評
+3、20分1本勝負
+さくらあや＆○玖麗さやか＆安納サオリ＆金屋あんね（11分8秒、片エビ固め）レディ・C＆稲葉ともか＆八神蘭奈＆虎龍清花●
+※ファルコンにゃろー
+選手コメント/寸評  ×10
+4、STARS vs H.A.T.E.イリミネーションマッチ（時間無制限）
+羽南＆飯田沙耶＆舞華＆林下詩美＆HANAKO＆月山和香＆姫ゆりあ＆浜辺纏（8-7）刀羅ナツコ＆渡辺桃＆小波＆上谷沙弥＆琉悪夏＆吏南＆ビー・プレストリー＆稲葉あずさ
+※1人残りでSTARSの勝利。敗退順は寸評に記載
+羽南「STARSが勝ったってことはさ、もうH.A.T.E.一強なんて言わせないよ」
+選手コメント/寸評  ×12
+5、スペシャルミックスドタッグマッチ（30分1本勝負）
+○なつぽい＆鷹木信悟（17分25秒、片エビ固め）水森由菜●＆後藤洋央紀
+※MADE IN JAPANっぽい
+選手コメント/寸評
+鷹木がブーイング受けなつぽいに謝罪
+選手コメント/寸評
+6、ワールド・オブ・スターダム選手権試合（30分1本勝負）
+<王者>○鈴季すず（23分6秒、ジャーマン・スープレックス・ホールド）スターライト・キッド●<挑戦者>
+※第22代王者が3度目の防衛に成功
+舞華と吏南登場。すずと舞華が先にワールド戦、勝者が12・29両国で吏南を迎撃へ
+選手コメント/寸評  ×16
+王座記録変遷史
+関連リンク
+AZM、天咲光由がスターダム10・27後楽園を欠場＆カード変更
+ニュース 2026/10/26(Monday)
+週刊プロレスTOP`;
+
+test('10/29の6試合を記事から分離し、トリオ3WAY・技・チーム勝敗を復元する',()=>{
+  const matches=context.parseMatches(october29);
+  assert.equal(matches.length,6);
+  for(const match of matches){assert.equal(match.parseOk,true);assert.equal(context.validateMatch(match),'');}
+  assert.deepEqual(plain(matches[1].groups.map(g=>g.members.map(m=>m.name))),[
+    ['伊藤麻希','古沢稀杏','梨杏'],['山下りな','青木いつ希','鉄アキラ'],['朱里','壮麗亜美','妃南']]);
+  assert.equal(matches[1].technique,'ダブルアームDDT→片エビ固め');
+  assert.equal(matches[2].technique,'ファルコンにゃろー→片エビ固め');
+  assert.equal(matches[4].technique,'MADE IN JAPANっぽい→片エビ固め');
+  assert.equal(matches[3].score,'8-7');
+  assert.equal(matches[3].time,'');
+  assert.equal(matches[3].winnerGroup,0);
+  assert.deepEqual(plain(matches[3].groups.map(g=>g.members.length)),[8,8]);
+  assert.ok(matches[3].groups.every(g=>g.members.every(m=>m.mark==='')));
+  assert.equal(context.matchWarning(matches[3]),'');
+  assert.ok(!JSON.stringify(matches).includes('エディオン'));
+  assert.ok(!JSON.stringify(matches).includes('謝罪'));
+  assert.equal(matches[5].championGroup,0);
+});
+
+test('3WAYで2グループしかない編集済みデータは保存時もエラーにする',()=>{
+  context.document={getElementById:()=>({value:''})};
+  const [match]=context.parseMatches(`2、3WAYトリオバトル
+【グループ】○伊藤麻希＆古沢稀杏＆梨杏
+【グループ】山下りな＆青木いつ希＆●鉄アキラ`);
+  assert.equal(match.parseOk,false);
+  assert.match(context.validateMatch(match),/WAY数/);
+});
+
+test('チーム勝敗とスコアを編集テキスト経由で往復し画像へ反映する',()=>{
+  vm.runInNewContext(applicationScript.slice(applicationScript.indexOf('let matches = []'),applicationScript.indexOf('function syncRawText()')),context);
+  context.fixture=october29;
+  context.document={getElementById:()=>({value:''})};
+  vm.runInNewContext('matches = parseMatches(fixture)',context);
+  const text=context.serializeEditableText();
+  const parsed=context.parseMatches(text);
+  assert.equal(parsed[3].score,'8-7');
+  assert.equal(parsed[3].winnerGroup,0);
+  assert.equal(parsed[3].groups[0].members[0].mark,'');
+  const labels=[];
+  const ctx=new Proxy({measureText:text=>({width:String(text).length*12}),fillText:text=>labels.push(text)},{get:(obj,key)=>key in obj?obj[key]:(()=>{})});
+  context.drawMatch({getContext:()=>ctx},parsed[3],{size:1080,bgType:'white',showTimeTech:true,showTitleTag:true,showNotes:false});
+  assert.ok(labels.includes('結果スコア：8-7'));
+  assert.equal(labels.filter(text=>text==='WIN').length,1);
+  assert.equal(labels.filter(text=>text==='VS').length,1);
+});
