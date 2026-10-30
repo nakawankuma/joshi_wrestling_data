@@ -363,7 +363,8 @@ function parseMatches(text) {
       if (cur) cur.noteLines.push(line.replace(/^※/, ''));
       continue;
     }
-    if (cur) cur.bodyLines.push(line);
+    // 結果行の後に続く記事見出しや関連リンクを選手名へ混ぜない。
+    if (cur && (!cur.bodyLines.length || !/[（(].*[）)]/.test(cur.bodyLines.join('')))) cur.bodyLines.push(line);
   }
   if (cur) matches.push(cur);
 
@@ -420,8 +421,8 @@ function parseEditableText(text) {
   const flush=()=>{ if(current){ items.push(current); current=null; } };
   const parseMembers=value=>value.split('＆').map(part=>{
     const trimmed=part.trim();
-    const mark=/^[○●]/.test(trimmed)?trimmed[0]:'';
-    return {name:(mark?trimmed.slice(1):trimmed).trim(),mark};
+    const mark=(trimmed.match(/[○●△]/)||[''])[0];
+    return {name:trimmed.replace(/[○●△]/g,'').trim(),mark};
   }).filter(member=>member.name||member.mark);
 
   for(let index=0;index<lines.length;index++){
@@ -479,14 +480,14 @@ function parseSingleMatch(m) {
   // 全角数字（０-９）も半角数字と同様に数字として扱う
   const digit = '[0-9０-９]';
   const decisionRe = new RegExp(`[（(](${digit}+分${digit}+秒)[、,]\\s*([^）)]+)[）)]`);
-  const decisionMatch = bodyRaw.match(decisionRe);
+  const decisionMatch = bodyRaw.match(decisionRe) || bodyRaw.match(/[（(](時間切れ引き分け)[）)]/);
 
   function toHalfWidthDigits(str){
     return str.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
   }
 
   const time = decisionMatch ? toHalfWidthDigits(decisionMatch[1]) : '';
-  const technique = decisionMatch ? decisionMatch[2] : '';
+  let technique = decisionMatch ? (decisionMatch[2] || '') : '';
 
   let leftRaw, rightRaw, parseOk = true;
   if (decisionMatch) {
@@ -514,6 +515,7 @@ function parseSingleMatch(m) {
       if (/[○◯〇]/.test(name)) { mark = '○'; name = name.replace(/[○◯〇]/g, ''); }
       // ●の異体字（⚫等）も統一認識
       if (/[●⚫]/.test(name)) { mark = '●'; name = name.replace(/[●⚫]/g, ''); }
+      if (/△/.test(name)) { mark = '△'; name = name.replace(/△/g, ''); }
       return { name: name.trim(), mark };
     });
   }
@@ -530,7 +532,7 @@ function parseSingleMatch(m) {
   const remainingNotes=[];
   for(const note of m.noteLines){
     const remainingMatch=note.match(/^(.*?)(?:。)?残り([0-9０-９]+)組は[、,:：]?\s*(.+)$/);
-    const extraMatch=note.match(/^(.*?)(?:。)?もう1組は[、,:：]\s*(.+)$/);
+    const extraMatch=note.match(/^(.*?)(?:。)?もう(?:[1１一]組|[1１一]人)は[、,:：]?\s*(.+)$/);
     if(remainingMatch && groups.length<expectedGroups){
       const count=+toHalfWidthDigits(remainingMatch[2]);
       const extraGroups=remainingMatch[3].split(/\s*[、,]\s*/).filter(Boolean);
@@ -546,6 +548,18 @@ function parseSingleMatch(m) {
     } else remainingNotes.push(note);
   }
 
+  // フォールの直前に使った技は、備考表示の設定によらず決まり技に含める。
+  if (/^(?:片エビ固め|エビ固め|体固め)$/.test(technique) && remainingNotes.length) {
+    const move=remainingNotes[0];
+    if (move && !/[。！？]|防衛|王者|^X[は＝=]/.test(move)) {
+      technique=move+'→'+technique;
+      remainingNotes.shift();
+    }
+  }
+  for (const note of remainingNotes) {
+    const identity=note.match(/^Xは(.+)$/);
+    if(identity) groups.forEach(group=>group.members.forEach(member=>{if(member.name==='X')member.name=identity[1];}));
+  }
   if(groups.length!==expectedGroups || groups.some(group=>!group.members.length))parseOk=false;
   return {
     no: m.no,
@@ -604,7 +618,7 @@ function validateMatch(match){
 
 function matchWarning(match){
   if(match.type==='section')return '';
-  const hasResult=(match.groups||[]).some(group=>(group.members||[]).some(member=>member.mark==='○'||member.mark==='●'));
+  const hasResult=(match.groups||[]).some(group=>(group.members||[]).some(member=>member.mark==='○'||member.mark==='●'||member.mark==='△'));
   return hasResult?'':'勝敗が設定されていません。';
 }
 
@@ -729,10 +743,10 @@ function drawMatch(canvas, match, settings) {
   ctx.textAlign = 'center';
   ctx.fillStyle = settings.accentColor;
   ctx.font = `900 ${Math.round(size*0.052)}px "Yu Gothic UI",sans-serif`;
-  ctx.fillText(formatText, size/2, size*(hasEventName ? 0.126 : 0.098));
+  if (formatText !== 'VS') ctx.fillText(formatText, size/2, size*(hasEventName ? 0.126 : 0.098));
 
   const nameAreaTop = size*(hasEventName ? 0.165 : 0.14);
-  const nameAreaBottom = (hasResultLine || hasNotes) ? size*0.86 : size*0.95;
+  const nameAreaBottom = (hasResultLine || hasNotes) ? size*0.81 : size*0.95;
 
   // 選手名中の <補足> / ＜補足＞ は、名前本体とは別の小さい行として描画する
   function splitDisplayName(name) {
@@ -815,6 +829,7 @@ function drawMatch(canvas, match, settings) {
 
   const winnerGroupIndexes=groups.map((group,index)=>group.members?.some(member=>member.mark==='○')?index:-1).filter(index=>index>=0);
   function groupResult(index){
+    if(groups.every(group=>group.members.some(member=>member.mark==='△')))return 'draw';
     if(winnerGroupIndexes.length!==1)return 'unknown';
     return winnerGroupIndexes[0]===index?'winner':'loser';
   }
@@ -824,7 +839,7 @@ function drawMatch(canvas, match, settings) {
     if (!hasTitleTag) return '';
     if (titleMode === 'vacant') return result === 'winner' ? '新王者' : '';
     if (titleMode !== 'title' || match.championGroup < 0) return '';
-    if (index === match.championGroup) return result === 'winner' ? '王座防衛' : (result === 'loser' ? '王者陥落' : '試合前王者');
+    if (index === match.championGroup) return (result === 'winner' || result === 'draw') ? '王座防衛' : (result === 'loser' ? '王者陥落' : '試合前王者');
     return result === 'winner' ? '新王者' : '';
   }
 
@@ -916,11 +931,13 @@ function drawMatch(canvas, match, settings) {
 
   // ---- 下端：決着時間・技（小さく、端に寄せる） ----
   if (hasResultLine) {
-    ctx.font = `${Math.round(size*0.024)}px "Yu Gothic UI",sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillStyle = settings.textColor;
-    const line = [match.time, match.technique].filter(Boolean).join('　');
-    ctx.fillText(line, size/2, size*0.895, size*0.85);
+    const resultLines = [match.time, match.technique].filter(Boolean);
+    resultLines.forEach((line,index)=>{
+      fitFont(line, size*0.9, size*0.032, 'bold');
+      ctx.fillText(line, size/2, size*(0.855+index*0.045), size*0.9);
+    });
   }
 
   // ---- 備考（さらに小さく最下端） ----
@@ -934,8 +951,8 @@ function drawMatch(canvas, match, settings) {
 
 /* ========== エディタUI構築 ========== */
 function markOptions(current){
-  const opts = ['', '○', '●'];
-  const labels = {'':'－','○':'勝ち','●':'負け'};
+  const opts = ['', '○', '●', '△'];
+  const labels = {'':'－','○':'勝ち','●':'負け','△':'引分'};
   return opts.map(o=>`<option value="${o}" ${o===current?'selected':''}>${labels[o]}</option>`).join('');
 }
 

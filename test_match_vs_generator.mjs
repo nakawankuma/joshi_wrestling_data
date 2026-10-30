@@ -110,3 +110,59 @@ test('勝者が未設定でもZIP出力の検証エラーにしない', () => {
   match.groups[1].members[0].mark = '●';
   assert.equal(context.matchWarning(match), '');
 });
+
+test('記事の混入を防ぎ、3WAYの第三選手とフィニッシュ技を復元する', () => {
+  const [match] = context.parseMatches(`3、3WAYバトル（15分1本勝負）
+○舞華（5分35秒、片エビ固め）儛島エマ●
+※みちのくドライバーⅡ。もう一人はレディ・C
+選手コメント/寸評  ×7
+関連記事＆リンク`);
+  assert.equal(match.parseOk,true);
+  assert.deepEqual(plain(match.groups.map(g=>g.members[0].name)),['舞華','儛島エマ','レディ・C']);
+  assert.equal(match.technique,'みちのくドライバーⅡ→片エビ固め');
+});
+
+test('時間切れ引き分けの王者と挑戦者を分離する', () => {
+  const [match]=context.parseMatches(`7、選手権試合（15分1本勝負）
+＜王者＞△八神蘭奈（時間切れ引き分け）稲葉あずさ△＜挑戦者＞
+※第14代王者が11度目の防衛に成功
+記事見出し`);
+  assert.equal(match.parseOk,true);
+  assert.deepEqual(plain(match.groups.map(g=>g.members[0])),[{name:'八神蘭奈',mark:'△'},{name:'稲葉あずさ',mark:'△'}]);
+  assert.equal(context.validateMatch(match),'');
+  assert.equal(context.matchWarning(match),'');
+});
+
+test('編集用テキストの末尾の引き分け記号も勝敗として保持する', () => {
+  context.document={getElementById:()=>({value:''})};
+  const [match]=context.parseMatches(`7、選手権試合
+【タイトル区分】通常タイトル戦
+【王者グループ】1
+【グループ】△八神蘭奈
+【グループ】稲葉あずさ△
+【決着時間】時間切れ引き分け`);
+  assert.equal(match.groups[1].members[0].mark,'△');
+  assert.equal(match.groups[1].members[0].name,'稲葉あずさ');
+});
+
+test('画像描画へ決着時間・決まり技・引き分け防衛を渡す', () => {
+  const drawing=applicationScript.slice(applicationScript.indexOf('function drawMatch('),applicationScript.indexOf('/* ========== エディタUI構築'));
+  vm.runInNewContext(drawing,context);
+  const labels=[];
+  const ctx=new Proxy({measureText:text=>({width:String(text).length*12}),fillText:text=>labels.push(text)},{get:(obj,key)=>key in obj?obj[key]:(()=>{})});
+  const canvas={getContext:()=>ctx};
+  const [match]=context.parseMatches(`7、選手権試合
+＜王者＞△八神蘭奈（時間切れ引き分け）稲葉あずさ△＜挑戦者＞`);
+  const settings={size:1080,bgType:'white',textColor:'#111111',accentColor:'#111111',showTimeTech:true,showTitleTag:true,showNotes:false};
+  context.drawMatch(canvas,match,settings);
+  assert.ok(labels.includes('王座防衛'));
+  assert.ok(labels.includes('時間切れ引き分け'));
+  labels.length=0;
+  const [three]=context.parseMatches(`3、3WAYバトル
+○舞華（5分35秒、片エビ固め）儛島エマ●
+※みちのくドライバーⅡ。もう一人はレディ・C`);
+  context.drawMatch(canvas,three,settings);
+  assert.ok(labels.includes('3WAY'));
+  assert.ok(labels.includes('レディ・C'));
+  assert.ok(labels.includes('みちのくドライバーⅡ→片エビ固め'));
+});
