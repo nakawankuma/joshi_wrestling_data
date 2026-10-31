@@ -40,3 +40,19 @@ test('コピーしたイリミネーションの入場順を復元する', () =>
   assert.deepEqual(plain(match.slotKeys), ['entries']);
   assert.equal(match.layout, 'elimination');
 });
+
+test('カードを移動先の前後へ挿入し、先頭・末尾へも移動できる',()=>{
+  const begin=html.indexOf('function moveMatchCard(');
+  const end=html.indexOf('function placedEl(',begin);
+  vm.runInNewContext(html.slice(begin,end),context);
+  const cards=[1,2,3,4].map(id=>({id}));
+  context.moveMatchCard(cards,1,3,true);
+  assert.deepEqual(cards.map(x=>x.id),[2,3,1,4]);
+  context.moveMatchCard(cards,4,2,false);
+  assert.deepEqual(cards.map(x=>x.id),[4,2,3,1]);
+  context.moveMatchCard(cards,4,1,true);
+  assert.deepEqual(cards.map(x=>x.id),[2,3,1,4]);
+  context.moveMatchCard(cards,3,3,false);
+  context.moveMatchCard(cards,99,1,false);
+  assert.deepEqual(cards.map(x=>x.id),[2,3,1,4]);
+});
