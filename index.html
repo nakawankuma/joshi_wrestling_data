@@ -778,6 +778,7 @@
             <div class="search-container">
                 <input type="text" id="wrestlerSearch" placeholder="選手名で検索..." class="search-input" aria-label="選手名検索" oninput="searchWrestlers()">
                 <button type="button" onclick="clearSearch()" class="clear-btn">クリア</button>
+                <button type="button" onclick="copyWrestlerPromotionList()" class="clear-btn">選手(団体)をコピー</button>
             </div>
             
             <div class="controls" id="controls" hidden>
@@ -2183,10 +2184,10 @@ const wrestlerData = [
             [
                         "2026",
                         "",
-                        "神嵜志音\nさとうもも\n清司麗菜\n咲森チエリ",
+                        "神嵜志音\nさとうもも\n清司麗菜\n咲森チエリ\n結結\n双葉しおり",
                         "松橋ななを\n山根百合\n確変むぎ\n松﨑紗弥\n初江律香(ACTRIUM)\n真白恵茉(ACTRIUM)\n西尾咲良(ACTRIUM)",
                         "ザ・レディAI\n鈴夏",
-                        "MIHO(HCC)\nヤギヌマメイ/ふゆぽい(SUGAMO)",
+                        "MIHO(HCC)\nヤギヌマメイ/ふゆぽい(SUGAMO)\n森田ともえ(HCC)",
                         "TSUBAKI\n浜名あみ",
                         "ちゅら愛花\n秋田ワン子",
                         "高野玲菜",
@@ -2207,10 +2208,10 @@ const wrestlerData = [
             [
                         "デビュー前",
                         "",
-                        "&lt;ユウカ&gt;(仮)\n&lt;双葉しおり&gt;(11.8デビュー予定)\n&lt;ゆい&gt;(11.8デビュー予定)",
+                        "&lt;ユウカ&gt;(仮)",
                         "&lt;紅葉&gt;(ACTRIUM)",
                         "&lt;涼寧&gt;\n&lt;雅&gt;",
-                        "&lt;森田ともえ&gt;(HCC)(11.8デビュー予定)",
+                        "",
                         "",
                         "&lt;Y&gt;\n&lt;みく&gt;(11.29デビュー予定)",
                         "",
@@ -3022,6 +3023,56 @@ const promotionNames = ["Stardom", "TJPW", "AWG/ACTRIUM", "マリーゴールド
                 debugLog(`検索結果選手数: ${total}人`);
             } catch (error) {
                 debugLog(`検索結果選手数計算エラー: ${error.message}`);
+            }
+        }
+
+        // 表の選手名を「選手(団体)」形式でコピーする
+        async function copyWrestlerPromotionList() {
+            const entries = [];
+            const seen = new Set();
+            const addNames = (promotion, names) => names.forEach(rawName => {
+                const name = String(rawName).replace(/<[^>]*>/g, '').replace(/&lt;|&gt;|[<>]/g, '').trim();
+                if (!name) return;
+                // 名前に団体表記があればそのまま使い、所属団体を重ねない
+                const alreadyHasPromotion = /\([^)]*(?:ACTRIUM|Stardom|TJPW|マリーゴールド|アイスリボン|Hotシュシュ|COR|Diana|JTO|SENDAI|マーベラス|Pure-J|チョコプロ|なにわ女子|LLPW-X|SEAdLINNNG|Wave|ガンプロ|柳ヶ瀬|Evolution)[^)]*\)/i.test(name);
+                const result = alreadyHasPromotion || promotion === 'その他' || promotion === 'フリー'
+                    ? name
+                    : `${name}(${promotion})`;
+                if (!seen.has(result)) { seen.add(result); entries.push(result); }
+            });
+
+            // 絞り込み詳細が表示されている場合は、その詳細データだけを対象にする
+            if (currentFilter?.type === 'promotion') {
+                currentFilter.data.forEach(row => addNames(currentFilter.value, (row[currentFilter.index] || '').split('\n')));
+            } else if (currentFilter?.type === 'year') {
+                currentFilter.data.forEach(promotion => addNames(promotion.name, promotion.wrestlers));
+            } else {
+                // フィルター前は現在の検索結果（なければ全選手）を対象にする
+                const sourceData = isSearching ? getCurrentFilteredData() : wrestlerData;
+                sourceData.forEach(row => {
+                    for (let i = 1; i < row.length && i - 1 < promotionNames.length; i++) {
+                        if (row[i]) addNames(promotionNames[i - 1], row[i].split('\n'));
+                    }
+                });
+            }
+
+            if (!entries.length) {
+                alert('コピーできる選手がありません。');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(entries.join('\n'));
+                alert(`${entries.length}人分をコピーしました。`);
+            } catch (error) {
+                const textarea = document.createElement('textarea');
+                textarea.value = entries.join('\n');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const copied = document.execCommand('copy');
+                textarea.remove();
+                alert(copied ? `${entries.length}人分をコピーしました。` : 'コピーに失敗しました。');
             }
         }
 
