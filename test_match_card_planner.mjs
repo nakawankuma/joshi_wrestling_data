@@ -56,3 +56,40 @@ test('カードを移動先の前後へ挿入し、先頭・末尾へも移動�
   context.moveMatchCard(cards,99,1,false);
   assert.deepEqual(cards.map(x=>x.id),[2,3,1,4]);
 });
+
+test('壊れた保存データを復元せず、正常な旧形式は復元する',()=>{
+  const modeStart=html.indexOf('const MAX_MATCH_SLOTS=');
+  const modeEnd=html.indexOf('function addMatchSlot(',modeStart);
+  const restoreStart=html.indexOf('function validSavedState(');
+  const restoreEnd=html.indexOf('function esc(',restoreStart);
+  const saved={value:null};
+  const runtime={
+    state:{matches:[],selected:null,nextId:1,custom:[]},
+    localStorage:{getItem:()=>saved.value},
+  };
+  vm.runInNewContext(html.slice(modeStart,modeEnd)+html.slice(restoreStart,restoreEnd),runtime);
+  const invalid=[
+    {matches:{}},
+    {matches:[{id:1,a:'選手A',b:[]}]},
+    {matches:[{id:1,layout:'multi',slotKeys:['a" onmouseover="alert(1)'],a:[]}]},
+    {matches:[],custom:'選手A'},
+  ];
+  for(const item of invalid){
+    saved.value=JSON.stringify(item);
+    assert.equal(runtime.restore(),false);
+    assert.equal(runtime.state.matches.length,0);
+  }
+  saved.value=JSON.stringify({matches:[{id:3,label:'第1試合',title:'タッグ',a:['選手A'],b:['選手B']}],nextId:2,custom:['選手C']});
+  assert.equal(runtime.restore(),true);
+  assert.equal(runtime.state.nextId,4);
+  assert.deepEqual(plain(runtime.state.selected),{id:3,side:'a'});
+  assert.deepEqual(plain(runtime.state.custom),['選手C']);
+  saved.value=JSON.stringify({matches:[
+    {id:4,label:'第2試合',title:'3WAY',memo:'',layout:'multi',slotKeys:['a','b','c'],a:['選手A'],b:['選手B'],c:['選手C']},
+    {id:5,label:'第3試合',title:'イリミネーション',memo:'',layout:'elimination',slotKeys:['entries'],entries:['選手D']},
+  ],nextId:6,custom:[]});
+  assert.equal(runtime.restore(),true);
+  assert.equal(runtime.state.matches.length,2);
+  assert.equal(runtime.state.nextId,6);
+  assert.equal(runtime.inferMatchMode('999999999WAY').count,64);
+});

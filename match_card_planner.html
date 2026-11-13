@@ -506,7 +506,9 @@ function cleanName(v){const d=document.createElement('textarea');d.innerHTML=v;r
 function namesFor(p){return (rosterData[p]||[]).map(cleanName).filter(Boolean)}
 function init(){const sel=$('#promotion');Object.keys(rosterData).forEach(p=>sel.add(new Option(`${p}（${namesFor(p).length}）`,p)));sel.add(new Option('追加した選手','__custom'));sel.onchange=renderLabels;$('#search').oninput=renderLabels;$('#addCustom').onclick=addCustom;$('#customName').onkeydown=e=>{if(e.key==='Enter')addCustom()};$('#addMatch').onclick=()=>addMatch($('#preset').value);$('#helpBtn').onclick=()=>$('#helpDialog').showModal();$('#helpDialog').onclick=e=>{if(e.target===$('#helpDialog'))$('#helpDialog').close()};$('#copyBtn').onclick=copyText;$('#toggleOutput').onclick=()=>{const o=$('#output');o.hidden=!o.hidden;$('#importText').textContent=o.hidden?'テキストをインポート':'編集テキストを反映';if(!o.hidden)updateOutput()};$('#importText').onclick=importPlannerText;$('#clearBtn').onclick=clearAll;if(!state.matches.length)addMatch('1/30 タッグマッチ');renderLabels()}
 function renderLabels(){const p=$('#promotion').value,q=$('#search').value.trim().toLowerCase();const list=(p==='__custom'?state.custom:namesFor(p)).filter(n=>n.toLowerCase().includes(q));labels.replaceChildren(...list.map(makeLabel));if(!list.length)labels.innerHTML='<div class="hint">該当する選手がいません</div>'}
-function inferMatchMode(title){if(/(?:イリミネーション|エリミネーション)/i.test(title))return{kind:'elimination',count:1};const way=title.match(/(\d+)\s*WAY/i);return{kind:way&&Number(way[1])>=3?'multi':'versus',count:way?Math.max(2,Number(way[1])):2}}
+// 入力テキストから極端な対戦枠数を生成しない。
+const MAX_MATCH_SLOTS=64;
+function inferMatchMode(title){if(/(?:イリミネーション|エリミネーション)/i.test(title))return{kind:'elimination',count:1};const way=title.match(/(\d+)\s*WAY/i),count=way?Math.min(MAX_MATCH_SLOTS,Math.max(2,Number(way[1]))):2;return{kind:count>=3?'multi':'versus',count}}
 function prepareMatch(m){if(!m.layout){const inferred=inferMatchMode(m.title||'');m.layout=inferred.kind;m.slotKeys=inferred.kind==='elimination'?['entries']:Array.from({length:inferred.count},(_,i)=>['a','b','c','d'][i]||`side${i+1}`)}if(m.layout==='elimination'){if(!Array.isArray(m.entries))m.entries=[...(m.a||[]),...(m.b||[]),...(m.c||[]),...(m.d||[])];m.slotKeys=['entries'];return{kind:'elimination',slots:m.slotKeys}}if(!Array.isArray(m.slotKeys)||m.slotKeys.length<2)m.slotKeys=['a','b'];m.slotKeys.forEach(k=>{if(!Array.isArray(m[k]))m[k]=[]});return{kind:m.slotKeys.length>2?'multi':'versus',slots:m.slotKeys}}
 function addMatchSlot(m){const mode=prepareMatch(m);if(mode.kind==='elimination')return;let n=mode.slots.length+1,key=`side${n}`;while(mode.slots.includes(key)){n++;key=`side${n}`}m[key]=[];m.slotKeys.push(key);m.layout='multi';state.selected={id:m.id,side:key};renderMatches();save()}
 function removeMatchSlot(m){const mode=prepareMatch(m);if(mode.kind==='elimination'||mode.slots.length<=2)return;const key=m.slotKeys.pop(),destination=m.slotKeys.at(-1);m[destination].push(...(m[key]||[]));delete m[key];m.layout=m.slotKeys.length>2?'multi':'versus';state.selected={id:m.id,side:destination};renderMatches();save()}
@@ -590,7 +592,35 @@ function importPlannerText(){const o=$('#output'),t=$('#outputText'),button=$('#
 async function copyText(){const value=outputText();try{await navigator.clipboard.writeText(value)}catch{const t=document.createElement('textarea');t.value=value;document.body.append(t);t.select();document.execCommand('copy');t.remove()}toast('試合カードをコピーしました')}
 function clearAll(){if(!confirm('作成中の試合カードをすべて消しますか？'))return;state.matches=[];state.selected=null;renderMatches();save()}
 function save(){localStorage.setItem('match-card-planner',JSON.stringify({matches:state.matches,nextId:state.nextId,custom:state.custom}))}
-function restore(){try{const s=JSON.parse(localStorage.getItem('match-card-planner'));if(s){state.matches=s.matches||[];state.nextId=s.nextId||1;state.custom=s.custom||[];state.selected=state.matches[0]?{id:state.matches[0].id,side:'a'}:null;return true}}catch{}return false}
+// 保存データの構造を確認してから画面状態へ反映する。
+function validSavedState(s){
+  if(!s||typeof s!=='object'||!Array.isArray(s.matches))return false;
+  if(s.custom!=null&&(!Array.isArray(s.custom)||!s.custom.every(v=>typeof v==='string')))return false;
+  if(s.nextId!=null&&(!Number.isSafeInteger(s.nextId)||s.nextId<1))return false;
+  const ids=new Set();
+  return s.matches.every(m=>{
+    if(!m||typeof m!=='object'||Array.isArray(m)||!Number.isSafeInteger(m.id)||m.id<1||ids.has(m.id))return false;
+    ids.add(m.id);
+    if(['label','title','memo'].some(k=>m[k]!=null&&typeof m[k]!=='string'))return false;
+    if(m.layout!=null&&!['versus','multi','elimination'].includes(m.layout))return false;
+    if(m.slotKeys!=null&&(!Array.isArray(m.slotKeys)||m.slotKeys.length>MAX_MATCH_SLOTS||new Set(m.slotKeys).size!==m.slotKeys.length||!m.slotKeys.every(k=>typeof k==='string'&&/^(?:a|b|c|d|entries|side[1-9]\d*)$/.test(k))))return false;
+    const isStringList=v=>Array.isArray(v)&&v.every(name=>typeof name==='string');
+    if(Object.entries(m).some(([k,v])=>/^(?:a|b|c|d|entries|side[1-9]\d*)$/.test(k)&&!isStringList(v)))return false;
+    return !m.slotKeys||m.slotKeys.every(k=>isStringList(m[k]));
+  });
+}
+function restore(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('match-card-planner'));
+    if(!validSavedState(saved))return false;
+    state.matches=saved.matches;
+    state.nextId=state.matches.reduce((next,m)=>Math.max(next,m.id+1),saved.nextId||1);
+    state.custom=saved.custom||[];
+    const first=state.matches[0];
+    state.selected=first?{id:first.id,side:prepareMatch(first).slots[0]}:null;
+    return true;
+  }catch{return false}
+}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(s){const t=$('#toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 if(restore()){init();renderMatches()}else init();

@@ -65,6 +65,11 @@ class XlsxToHtmlConverter:
             raise Exception(f"設定ファイルのJSON形式が正しくありません: {e}")
         except Exception as e:
             raise Exception(f"設定ファイル読み込みエラー: {e}")
+
+    @staticmethod
+    def json_for_inline_script(value, **options):
+        """HTMLのscript要素をデータ内の終了タグで閉じられないJSONを作る。"""
+        return json.dumps(value, ensure_ascii=False, **options).replace("<", "\\u003c")
     
     @staticmethod
     def replace_generated_block(content, start_marker, end_marker, replacement, label):
@@ -241,7 +246,7 @@ class XlsxToHtmlConverter:
         print(f"処理されたデータ行数: {len(js_array)}")
         
         # JavaScript配列を完全なJSONとして生成
-        js_array_json = json.dumps(js_array, ensure_ascii=False, indent=12)
+        js_array_json = self.json_for_inline_script(js_array, indent=12)
         
         # const宣言とセミコロンを追加
         js_string = f"const {self.config['js_variable_name']} = {js_array_json};"
@@ -340,7 +345,7 @@ class XlsxToHtmlConverter:
             content = f.read()
 
         # 団体・選手単位でGit差分を確認できるよう、読みやすく整形して出力する
-        roster_json = json.dumps(roster_data, ensure_ascii=False, indent=2)
+        roster_json = self.json_for_inline_script(roster_data, indent=2)
         replacement = f"const rosterData = {roster_json};"
         updated = self.replace_generated_block(
             content,
@@ -360,8 +365,10 @@ class XlsxToHtmlConverter:
         if parsed_roster != roster_data:
             raise Exception("カード検討ツールの選手データ生成に失敗しました")
 
-        with open(file_path, 'w', encoding=self.config["encoding"]) as f:
-            f.write(updated)
+        # 生成部分に変更がなければ書き込みを省き、読み取り専用環境でも検証を続ける。
+        if updated != content:
+            with open(file_path, 'w', encoding=self.config["encoding"]) as f:
+                f.write(updated)
 
         wrestler_count = sum(len(wrestlers) for wrestlers in roster_data.values())
         print(f"カード検討ツール更新完了: {len(roster_data)}団体 / {wrestler_count}選手")
@@ -410,7 +417,7 @@ class XlsxToHtmlConverter:
             )
             
             # JavaScript配列の団体名も更新
-            promotion_names_js = json.dumps(promotion_names, ensure_ascii=False)
+            promotion_names_js = self.json_for_inline_script(promotion_names)
             new_promotion_js = f'const promotionNames = {promotion_names_js};'
             html_content = self.replace_generated_block(
                 html_content,

@@ -12,6 +12,8 @@ from xlsx_to_html_converter_all_in_one import (
     COMPLETION_ICON,
     PROMOTION_NAMES_END,
     PROMOTION_NAMES_START,
+    ROSTER_DATA_END,
+    ROSTER_DATA_START,
     XlsxToHtmlConverter,
 )
 
@@ -158,6 +160,52 @@ class XlsxToHtmlConverterTest(unittest.TestCase):
             "promotion names",
         )
         self.assertEqual(parsed, ["O'Reilly <Test>"])
+
+    def test_generated_script_data_cannot_close_script_tag(self):
+        payload = "</script><script>alert(1)</script>"
+        dataframe = self.make_dataframe([
+            [None, "デビュー年", payload],
+            [None, 2026, "選手A"],
+        ])
+        source = (
+            '<tr><th class="sortable desc">デビュー年</th></tr>\n'
+            f'{PROMOTION_NAMES_START}\nconst promotionNames = ["Old"];\n'
+            f'{PROMOTION_NAMES_END}\n'
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            html_file = Path(temp_dir) / "index.html"
+            planner_file = Path(temp_dir) / "match_card_planner.html"
+            html_file.write_text(source, encoding="utf-8")
+            planner_file.write_text(
+                f'{ROSTER_DATA_START}\nconst rosterData = {{}};\n{ROSTER_DATA_END}',
+                encoding="utf-8",
+            )
+            self.converter.update_html_headers([payload], str(html_file))
+            result = html_file.read_text(encoding="utf-8")
+            roster = self.converter.convert_to_roster_data(dataframe, [payload])
+            self.converter.update_match_card_planner(roster, str(planner_file))
+            planner_result = planner_file.read_text(encoding="utf-8")
+
+        declaration = self.converter.convert_to_js_array(dataframe)
+        self.assertNotIn("</script>", result)
+        self.assertNotIn("</script>", declaration)
+        self.assertNotIn("</script>", planner_result)
+        self.assertEqual(
+            self.converter.extract_generated_json(
+                result, PROMOTION_NAMES_START, PROMOTION_NAMES_END,
+                "promotionNames", "promotion names",
+            ),
+            [payload],
+        )
+        self.assertEqual(roster[payload], ["選手A"])
+        self.assertIn("\\u003c/script>", result)
+        self.assertEqual(
+            self.converter.extract_generated_json(
+                planner_result, ROSTER_DATA_START, ROSTER_DATA_END,
+                "rosterData", "roster data",
+            ),
+            roster,
+        )
 
     def test_full_width_parentheses_are_normalized_in_generated_data(self):
         source = self.make_dataframe([
